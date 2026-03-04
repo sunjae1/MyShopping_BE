@@ -1,23 +1,59 @@
 package myex.shopping.config;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
+import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.core.annotation.Order;
 import org.springframework.http.HttpMethod;
+import org.springframework.security.authentication.AuthenticationManager;
+import org.springframework.security.config.annotation.authentication.builders.AuthenticationManagerBuilder;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
+import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 
 @Configuration
 @EnableWebSecurity
+@RequiredArgsConstructor
 public class SecurityConfig {
 
+    private final ObjectMapper objectMapper;
+
     @Bean
-    public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
+    @Order(1)
+    public SecurityFilterChain apiSecurityFilterChain(HttpSecurity http) throws Exception {
+        AuthenticationManagerBuilder sharedObject = http.getSharedObject(AuthenticationManagerBuilder.class);
+        AuthenticationManager authenticationManager = sharedObject.build();
+
+        http.authenticationManager(authenticationManager);
+
+        JsonUsernamePasswordAuthenticationFilter jsonUsernamePasswordAuthenticationFilter =
+                new JsonUsernamePasswordAuthenticationFilter(objectMapper, authenticationManager);
+        jsonUsernamePasswordAuthenticationFilter.setAuthenticationSuccessHandler(new ApiLoginSuccessHandler());
+        jsonUsernamePasswordAuthenticationFilter.setAuthenticationFailureHandler(new ApiLoginFailureHandler());
+
+
+        http
+                .securityMatcher("/api/**")
+                .csrf(AbstractHttpConfigurer::disable)
+                .authorizeHttpRequests(auth -> auth
+                        .requestMatchers("/api/login", "/api/register").permitAll()
+                        .anyRequest().authenticated()
+                )
+                .addFilterAt(jsonUsernamePasswordAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
+        return http.build();
+    }
+
+    @Bean
+    @Order(2)
+    public SecurityFilterChain webSecurityFilterChain(HttpSecurity http) throws Exception {
         http
                 .authorizeHttpRequests((requests) -> requests
-                        .requestMatchers("/", "/register", "/login", "/*.css", "/css/**","/js/**", "/image/**", "/api/**", "/swagger-ui/**", "/swagger-ui.html", "/v3/api-docs/**", "swagger-resources/**", "/webjars/**", "/error").permitAll()
+                        .requestMatchers("/", "/register", "/login", "/*.css", "/css/**","/js/**", "/image/**", "/swagger-ui/**", "/swagger-ui.html", "/v3/api-docs/**", "swagger-resources/**", "/webjars/**", "/error").permitAll()
                         .requestMatchers(HttpMethod.GET, "/posts", "/posts/{id}").permitAll()
                         .anyRequest().authenticated()
                 )

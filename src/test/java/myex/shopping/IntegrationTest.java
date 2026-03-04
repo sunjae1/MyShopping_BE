@@ -2,14 +2,14 @@ package myex.shopping;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import myex.shopping.domain.*;
+import myex.shopping.dto.userdto.LoginRequestDto;
 import myex.shopping.form.CartForm;
-import myex.shopping.form.ItemAddForm;
 import myex.shopping.form.PostForm;
 import myex.shopping.repository.ItemRepository;
 import myex.shopping.repository.OrderRepository;
-import myex.shopping.repository.PostRepository;
 import myex.shopping.repository.UserRepository;
 import myex.shopping.service.ImageService;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -18,6 +18,7 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.http.MediaType;
 import org.springframework.mock.web.MockHttpSession;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 import org.springframework.transaction.annotation.Transactional;
@@ -50,8 +51,30 @@ public class IntegrationTest {
     @Autowired
     private OrderRepository orderRepository;
 
+    @Autowired
+    private PasswordEncoder passwordEncoder;
+
     @MockBean
     private ImageService imageService;
+
+    @BeforeEach
+    void setupUsersForApiLoginTests() {
+        // Given: Create users for API login tests in a separate setup method
+        // to ensure they are committed before the test execution.
+        if (userRepository.findByEmail("apiuser@example.com").isEmpty()) {
+            User user1 = new User("apiuser@example.com", "Api User", passwordEncoder.encode("password"));
+            user1.setActive(true); // 사용자를 활성 상태로 설정
+            userRepository.save(user1);
+        }
+        if (userRepository.findByEmail("apiuser2@example.com").isEmpty()) {
+            User user2 = new User("apiuser2@example.com", "Api User 2", passwordEncoder.encode("password"));
+            user2.setActive(true); // 사용자를 활성 상태로 설정
+            userRepository.save(user2);
+        }
+    }
+
+
+
 
     @Test
     @DisplayName("사용자 전체 시나리오 통합 테스트: 회원가입 -> 로그인 -> 상품 추가 -> 장바구니 담기 -> 주문 -> 게시글 작성")
@@ -212,14 +235,48 @@ public class IntegrationTest {
                 .param("email", "userA@example.com")
                 .param("password", "password")
                 .session(userASession));
-        
+
         // when & then
         // User A가 자신의 주문 취소 시도
         mockMvc.perform(post("/items/{id}/cancel", order.getId())
                         .session(userASession))
                 .andExpect(status().is3xxRedirection());
-        
+
         Order cancelledOrder = orderRepository.findById(order.getId()).orElseThrow();
         assertThat(cancelledOrder.getStatus()).isEqualTo(OrderStatus.CANCELLED);
     }
+    @Test
+    @DisplayName("API 로그인 성공 테스트")
+    void apiLogin_Success() throws Exception {
+        // given
+        LoginRequestDto loginRequest = new LoginRequestDto();
+        loginRequest.setEmail("apiuser@example.com");
+        loginRequest.setPassword("password");
+
+        // when & then
+        mockMvc.perform(post("/api/login")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(loginRequest)))
+                .andExpect(status().isOk())
+                .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_JSON))
+                .andExpect(jsonPath("$.email").value("apiuser@example.com"))
+                .andExpect(jsonPath("$.name").value("Api User"));
+    }
+
+    @Test
+    @DisplayName("API 로그인 실패 테스트: 잘못된 비밀번호")
+    void apiLogin_Fails_WithWrongPassword() throws Exception {
+        // given
+        LoginRequestDto loginRequest = new LoginRequestDto();
+        loginRequest.setEmail("apiuser2@example.com");
+        loginRequest.setPassword("wrongpassword");
+
+        // when & then
+        mockMvc.perform(post("/api/login")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(loginRequest)))
+                .andExpect(status().isUnauthorized());
+    }
+
+
 }

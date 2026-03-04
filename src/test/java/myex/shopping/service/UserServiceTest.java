@@ -44,47 +44,6 @@ class UserServiceTest {
     }
 
     @Test
-    @DisplayName("로그인에 성공한다")
-    void login_Success() {
-        // given
-        User user = new User("test@test.com", "Tester", "password");
-        when(userRepository.findByEmail("test@test.com")).thenReturn(Optional.of(user));
-
-        // when
-        User loginUser = userService.login("test@test.com", "password");
-
-        // then
-        assertThat(loginUser).isEqualTo(user);
-    }
-
-    @Test
-    @DisplayName("잘못된 비밀번호로 로그인에 실패한다")
-    void login_Fail_WrongPassword() {
-        // given
-        User user = new User("test@test.com", "Tester", "password");
-        when(userRepository.findByEmail("test@test.com")).thenReturn(Optional.of(user));
-
-        // when
-        User loginUser = userService.login("test@test.com", "wrongpassword");
-
-        // then
-        assertThat(loginUser).isNull();
-    }
-    
-    @Test
-    @DisplayName("존재하지 않는 이메일로 로그인에 실패한다")
-    void login_Fail_WrongEmail() {
-        // given
-        when(userRepository.findByEmail("wrong@test.com")).thenReturn(Optional.empty());
-
-        // when
-        User loginUser = userService.login("wrong@test.com", "password");
-
-        // then
-        assertThat(loginUser).isNull();
-    }
-
-    @Test
     @DisplayName("모든 사용자를 조회한다")
     void allUser() {
         // given

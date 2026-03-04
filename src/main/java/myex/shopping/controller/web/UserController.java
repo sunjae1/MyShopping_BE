@@ -9,12 +9,14 @@ import myex.shopping.domain.*;
 import myex.shopping.dto.itemdto.ItemDto;
 import myex.shopping.dto.mypagedto.MyPageOrderDto;
 import myex.shopping.dto.mypagedto.MyPagePostDBDto;
+import myex.shopping.dto.userdto.PrincipalDetails;
 import myex.shopping.dto.userdto.UserDto;
 import myex.shopping.exception.ResourceNotFoundException;
 import myex.shopping.form.LoginForm;
 import myex.shopping.form.RegisterForm;
 import myex.shopping.repository.ItemRepository;
 import myex.shopping.service.*;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
 import org.springframework.validation.BindingResult;
@@ -77,15 +79,14 @@ public class UserController {
     //메인 페이지 요청 : Item, User (+검색 추가)
     @GetMapping("/")
     public String mainPage(Model model,
-                           Principal principal,
+                           @AuthenticationPrincipal(expression = "#this == 'anonymousUser' ? null : principalDetails")
+                           PrincipalDetails principalDetails,
                            @RequestParam(required = false) String keyword,
                            @RequestParam(required = false) Long categoryId) {
-
-        if (principal != null) {
-            User loginUser =userService.findByEmail(principal.getName())
-                    .orElseThrow(() -> new ResourceNotFoundException("User not found"));
+        if (principalDetails != null) { //인증된 사용자일 경우에만 처리
+            User loginUser = principalDetails.getUser();
             UserDto userDto = new UserDto(loginUser);
-            model.addAttribute("user",userDto);
+            model.addAttribute("user", userDto);
         }
         List<ItemDto> items = itemService.findItems(keyword, categoryId);
         model.addAttribute("items", items);
@@ -93,13 +94,12 @@ public class UserController {
     }
     //마이페이지 보내는거 : user, orders, posts, cart
     @GetMapping("/mypage")
-    public String myPage(Principal principal,
+    public String myPage(@AuthenticationPrincipal PrincipalDetails principalDetails,
                          Model model)
     {
-        User loginUser = userService.findByEmail(principal.getName())
-                .orElseThrow(() -> new ResourceNotFoundException("User not found"));
-            UserDto userDto = new UserDto(loginUser);
-            model.addAttribute("user",userDto);
+        User loginUser = principalDetails.getUser();
+        UserDto userDto = new UserDto(loginUser);
+        model.addAttribute("user",userDto);
 
         Cart cart = cartService.findOrCreateCartForUser(loginUser);
         log.info("cart.getId() : {}", cart.getId());

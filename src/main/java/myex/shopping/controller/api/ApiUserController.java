@@ -54,27 +54,9 @@ public class ApiUserController {
     private final CartService cartService;
 
 
-    @Operation(
-            summary = "로그인 성공",
-            description = "ID와 PW를 입력해 로그인을 처리한다.",
-            responses = {
-                    @ApiResponse(responseCode = "200", description = "로그인 성공"),
-                    @ApiResponse(responseCode = "401", description = "로그인 인증 실패")
-            }
-    )
+
     //로그인
-    @PostMapping("/login")
-    public ResponseEntity<UserDto> login(@Valid @RequestBody LoginRequestDto loginRequestDto, HttpSession session) {
-        User loginUser = userService.login(loginRequestDto.getEmail(), loginRequestDto.getPassword());
-        if (loginUser == null) {
-            log.info("로그인 실패 ");
-            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build(); //로그인 실패, 인증 실패
-        }
-        //로그인 성공 로직 (있으면 반환, 아니면 UUID 사용하여 신규 세션 생성)
-        log.info("{} 로그인 성공(userService.login 메소드 통과)", loginUser);
-        session.setAttribute("loginUser", loginUser);
-        return ResponseEntity.ok(new UserDto(loginUser)); //200 OK
-    }
+    //Spring Security 대신 처리.
     @Operation(
             summary = "전체 사용자 조회",
             description = "관리자가 전체 사용자를 조회합니다.",

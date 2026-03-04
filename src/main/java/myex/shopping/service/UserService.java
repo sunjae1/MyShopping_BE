@@ -3,10 +3,10 @@ package myex.shopping.service;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import myex.shopping.domain.User;
+import myex.shopping.dto.userdto.PrincipalDetails;
 import myex.shopping.dto.userdto.UserEditDto;
 import myex.shopping.exception.ResourceNotFoundException;
 import myex.shopping.repository.UserRepository;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
@@ -45,36 +45,28 @@ public class UserService implements UserDetailsService {
         return savedUser.getId();
     }
     //로그인 로직.
-    public User login(String email, String password) {
-        //로그인 페이지 반환
-        return userRepository.findByEmail(email)
-                .filter(user -> user.getPassword().equals(password))
-                .orElse(null);
-    }
+    //Spring Security가 대신 수행.
+
+    //Spring Security가 인증 과정에서 호출.(사용자 로그인 시도 시)
     @Override
     public UserDetails loadUserByUsername(String email) throws UsernameNotFoundException {
         User user = userRepository.findByEmail(email)
                 .orElseThrow(() -> new UsernameNotFoundException("User not found with email: " + email));
-        return org.springframework.security.core.userdetails.User.builder()
-                .username(user.getEmail())
-                .password(user.getPassword())
-                .roles("USER") //필요한 경우 역할 추가
-                .build();
-
+        return new PrincipalDetails(user);
     }
-    //전체 사용자 조회
 
+    //전체 사용자 조회
     public List<User> allUser() {
         return userRepository.findAll();
     }
-    //활성화된 전체 사용자 조회
 
+    //활성화된 전체 사용자 조회
     public List<User> allUserByActive() {
         return userRepository.findAllByActiveTrue();
     }
+
     //회원 정보 수정 (name, email)
     //더티 체킹
-
     @Transactional(readOnly = false)
     public User updateUser(Long id, UserEditDto updateDTO) {
         User user = userRepository.findById(id)
@@ -87,8 +79,8 @@ public class UserService implements UserDetailsService {
         }
         return user;
     }
-    //사용자 삭제. -> active로 구분.(soft-delete)
 
+    //사용자 삭제. -> active로 구분.(soft-delete)
     public void deleteUser(Long id) {
         User user = userRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("User not found"));
