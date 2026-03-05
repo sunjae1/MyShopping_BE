@@ -98,7 +98,8 @@ jobs:
 
           # 5. Nginx 포트 변경
           # (myapp.template 파일이 /etc/nginx/sites-available/ 에 있어야 함)
-          sudo sed \"s/PORT_NUMBER/\$NEW_PORT/\" /etc/nginx/sites-available/myapp.template | sudo tee /etc/nginx/sites-available/myapp > /dev/null
+          sudo cp /etc/nginx/sites-available/myapp.template /etc/nginx/sites-available/myapp
+          sudo sed -i \"s/PORT_NUMBER/\$NEW_PORT/g\" /etc/nginx/sites-available/myapp
           sudo nginx -t && sudo systemctl reload nginx
 
           # 6. 이전 포트 정리
