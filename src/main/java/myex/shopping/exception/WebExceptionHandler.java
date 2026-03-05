@@ -1,83 +1,54 @@
 package myex.shopping.exception;
 
+import myex.shopping.domain.User;
 import org.springframework.beans.TypeMismatchException;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.ControllerAdvice;
 import org.springframework.web.bind.annotation.ExceptionHandler;
+import org.springframework.web.bind.annotation.ResponseStatus;
 
 import java.util.HashMap;
 import java.util.Map;
 
 @ControllerAdvice(basePackages = "myex.shopping.controller.web")
 public class WebExceptionHandler {
-    //Form + ModelAttribute 는 BindingResult로 처리.
-/*   안됨. 전역으로 잡을려면 Valid + BindingResult를 포기.
-// 단일 값 검증 처리는 컨트롤러 안에서 처리 하기로 변경.
- //@PathVariable 검증을 위해서
-    @ExceptionHandler(ConstraintViolationException.class )
-    public String handleConstraintViolation(ConstraintViolationException ex,
-                                            HttpServletRequest request,
-                                            RedirectAttributes redirectAttributes){
 
-        System.out.println("GlobalExceptionHandler.handleConstraintViolation");
-
-        //map : Stream 안의 요소 변환.
-        String errorMessage = ex.getConstraintViolations().stream()
-                .map(ConstraintViolation::getMessage)
-                .collect(Collectors.joining(", "));//위반이 여러 개 어노테이션일 경우 쉼표로 구분.
-
-        redirectAttributes.addFlashAttribute("errorMessage", errorMessage);
-
-        //이전 페이지로 리다이렉트
-        String referer = request.getHeader("Referer");
-        if (referer !=null && !referer.isEmpty()) {
-            return "redirect:" + referer;
-        } else {
-            return "redirect:/main"; //fallback (없을때 대체 페이지)
-        }
-
-    }
-
-    //@RequestParam 검증 위해서.
-    @ExceptionHandler(MissingServletRequestParameterException.class)
-    public String handleMissingParam(MissingServletRequestParameterException ex,
-                                     HttpServletRequest request,
-                                     RedirectAttributes redirectAttributes) {
-
-        System.out.println("GlobalExceptionHandler.handleMissingParam");
-
-        String parameterName = ex.getParameterName();
-
-        String errorMessage = "필수 요청 파라미터 '" + parameterName +"'가 누락되었습니다.";
-        redirectAttributes.addFlashAttribute("errorMessage", errorMessage);
-
-        String referer = request.getHeader("Referer");
-        if (referer !=null && !referer.isEmpty()) {
-            return "redirect:" + referer;
-        } else {
-            return "redirect:/main"; //fallback (없을때 대체 페이지)
-        }
-
-
-    }*/
-
-    //타입 미스매치, 뷰로 뿌리는건 나중에 변경. (전체 추가해야 해서 hmtl layout 사용 예정)
+    // 타입 미스매치 처리
     @ExceptionHandler(TypeMismatchException.class)
-    public ResponseEntity<Map<String,String>> handleTypeMismatch(TypeMismatchException ex) {
+    public String handleTypeMismatch(TypeMismatchException ex, Model model) {
         Map<String, String> error = new HashMap<>();
-        String field = (ex.getPropertyName() == null) ? null : ex.getPropertyName(); //파라미터 명. Long id
-        String invalidValue = (ex.getValue() == null) ? null : ex.getValue().toString(); //무효 요청 값.
+        String field = (ex.getPropertyName() == null) ? null : ex.getPropertyName();
+        String invalidValue = (ex.getValue() == null) ? null : ex.getValue().toString();
         String requiredType = (ex.getRequiredType() == null) ? null : ex.getRequiredType().getSimpleName();
         error.put(field, String.format("'%s'은(는) %s 타입으로 변환할 수 없습니다.", invalidValue, requiredType));
-        return ResponseEntity.badRequest().body(error);
+        model.addAttribute("errorMessage", error.get(field));
+        return "error/404";
     }
+
+    // 리소스를 찾을 수 없는 경우 (404)
     @ExceptionHandler(ResourceNotFoundException.class)
+    @ResponseStatus(HttpStatus.NOT_FOUND)
     public String handleNotFound(ResourceNotFoundException e, Model model) {
         model.addAttribute("errorMessage", e.getMessage());
-        return "error/404"; //404.html로 이동.
+        return "error/404";
     }
 
+    // 접근 권한이 없는 경우 (403)
+    @ExceptionHandler({ AccessDeniedException.class, AccessForbiddenException.class })
+    @ResponseStatus(HttpStatus.FORBIDDEN)
+    public String handleAccessDenied(Exception e, Model model) {
+        model.addAttribute("errorMessage", "접근 권한이 없습니다.");
+        return "error/403";
+    }
 
-
+    // 일반 서버 오류 (500)
+    @ExceptionHandler(Exception.class)
+    @ResponseStatus(HttpStatus.INTERNAL_SERVER_ERROR)
+    public String handleGeneralException(Exception e, Model model) {
+        model.addAttribute("errorMessage", "시스템 오류가 발생했습니다.");
+        return "error";
+    }
 }

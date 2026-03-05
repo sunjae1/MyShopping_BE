@@ -1,0 +1,2 @@
+-- User 엔티티에 추가된 role 필드를 DB에 반영
+ALTER TABLE MEMBER ADD COLUMN role VARCHAR(20) DEFAULT 'USER' NOT NULL;

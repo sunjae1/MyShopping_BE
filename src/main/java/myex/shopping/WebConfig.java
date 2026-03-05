@@ -26,7 +26,7 @@ public class WebConfig implements WebMvcConfigurer {
     }
     
     //인터셉터 등록
-    public void addInterceptors(InterceptorRegistry registry) {
+ /*   public void addInterceptors(InterceptorRegistry registry) {
         registry.addInterceptor(loginCheckInterceptor)
                 .addPathPatterns("/**") //모든 요청에 적용
                 .addPathPatterns("/posts/new")
@@ -52,5 +52,5 @@ public class WebConfig implements WebMvcConfigurer {
                 );
 
 
-    }
+    }*/
 }

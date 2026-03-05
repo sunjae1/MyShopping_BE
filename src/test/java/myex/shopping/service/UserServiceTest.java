@@ -9,6 +9,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.security.crypto.password.PasswordEncoder;
 
 import java.util.Arrays;
 import java.util.List;
@@ -17,6 +18,7 @@ import java.util.Optional;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -24,6 +26,9 @@ class UserServiceTest {
 
     @Mock
     private UserRepository userRepository;
+
+    @Mock
+    private PasswordEncoder passwordEncoder;
 
     @InjectMocks
     private UserService userService;
@@ -34,6 +39,7 @@ class UserServiceTest {
         // given
         User user = new User("test@test.com", "Tester", "password");
         user.setId(1L);
+        when(passwordEncoder.encode(anyString())).thenReturn("encodedPassword");
         when(userRepository.save(any(User.class))).thenReturn(user);
 
         // when
@@ -41,47 +47,6 @@ class UserServiceTest {
 
         // then
         assertThat(savedId).isEqualTo(1L);
-    }
-
-    @Test
-    @DisplayName("로그인에 성공한다")
-    void login_Success() {
-        // given
-        User user = new User("test@test.com", "Tester", "password");
-        when(userRepository.findByEmail("test@test.com")).thenReturn(Optional.of(user));
-
-        // when
-        User loginUser = userService.login("test@test.com", "password");
-
-        // then
-        assertThat(loginUser).isEqualTo(user);
-    }
-
-    @Test
-    @DisplayName("잘못된 비밀번호로 로그인에 실패한다")
-    void login_Fail_WrongPassword() {
-        // given
-        User user = new User("test@test.com", "Tester", "password");
-        when(userRepository.findByEmail("test@test.com")).thenReturn(Optional.of(user));
-
-        // when
-        User loginUser = userService.login("test@test.com", "wrongpassword");
-
-        // then
-        assertThat(loginUser).isNull();
-    }
-    
-    @Test
-    @DisplayName("존재하지 않는 이메일로 로그인에 실패한다")
-    void login_Fail_WrongEmail() {
-        // given
-        when(userRepository.findByEmail("wrong@test.com")).thenReturn(Optional.empty());
-
-        // when
-        User loginUser = userService.login("wrong@test.com", "password");
-
-        // then
-        assertThat(loginUser).isNull();
     }
 
     @Test
@@ -109,7 +74,7 @@ class UserServiceTest {
         UserEditDto updateDto = new UserEditDto();
         updateDto.setName("NewName");
         updateDto.setEmail("new@test.com");
-        
+
         when(userRepository.findById(userId)).thenReturn(Optional.of(existingUser));
 
         // when

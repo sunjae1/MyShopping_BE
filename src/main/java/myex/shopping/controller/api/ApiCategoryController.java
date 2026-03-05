@@ -9,14 +9,12 @@ import myex.shopping.domain.Category;
 import myex.shopping.dto.categorydto.CategoryCreateDTO;
 import myex.shopping.dto.categorydto.CategoryDTO;
 import myex.shopping.dto.categorydto.CategoryEditDTO;
-import myex.shopping.repository.jpa.JpaCategoryRepository;
 import myex.shopping.service.CategoryService;
 import org.springframework.http.ResponseEntity;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
-import java.util.stream.Collectors;
 
 @Slf4j
 @RestController
@@ -26,40 +24,38 @@ import java.util.stream.Collectors;
 @Validated
 public class ApiCategoryController {
 
-    private final JpaCategoryRepository categoryRepository;
     private final CategoryService categoryService;
 
-    //전체조회
+    // 전체조회
     @GetMapping
     public ResponseEntity<List<CategoryDTO>> getAllCategories() {
-        List<CategoryDTO> categories = categoryRepository.findAll()
-                .stream()
-                .map(CategoryDTO::new)
-                .collect(Collectors.toList());
+        List<CategoryDTO> categories = categoryService.findAll();
         return ResponseEntity.ok(categories);
     }
-    //단일 조회
+
+    // 단일 조회
     @GetMapping("/{id}")
     public ResponseEntity<CategoryDTO> getCategoryById(@PathVariable @Positive(message = "양수만 입력 가능합니다.") Long id) {
-        return categoryRepository.findById(id)
-                .map(CategoryDTO::new)
-                .map(ResponseEntity::ok)
-                .orElseGet(() -> ResponseEntity.notFound().build());
+        CategoryDTO category = categoryService.findById(id);
+        return ResponseEntity.ok(category);
     }
-    //등록
+
+    // 등록
     @PostMapping
     public ResponseEntity<CategoryDTO> createCategory(@RequestBody @Valid CategoryCreateDTO createDTO) {
         CategoryDTO categoryDTO = new CategoryDTO(categoryService.createCategory(createDTO));
         return ResponseEntity.status(201).body(categoryDTO);
     }
-    //수정
+
+    // 수정
     @PutMapping("/{id}")
     public ResponseEntity<CategoryDTO> updateCategory(@PathVariable @Positive(message = "양수만 가능합니다.") Long id,
-                                                      @RequestBody CategoryEditDTO updateDTO) {
+            @RequestBody CategoryEditDTO updateDTO) {
         Category category = categoryService.updateCategory(id, updateDTO);
         return ResponseEntity.ok(new CategoryDTO(category));
     }
-    //삭제
+
+    // 삭제
     @DeleteMapping("/{id}")
     public ResponseEntity<Void> deleteCategory(@PathVariable @Positive Long id) {
         categoryService.deleteCategory(id);
