@@ -13,7 +13,6 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.mock.web.MockHttpSession;
 
 import java.util.Optional;
 
@@ -87,21 +86,17 @@ class CartServiceTest {
         cart.addItem(item, 1);
         user.addCart(cart);
 
-        MockHttpSession session = new MockHttpSession();
-        session.setAttribute("loginUser", user);
-
         when(itemRepository.findById(1L)).thenReturn(Optional.of(item));
         when(userRepository.findById(1L)).thenReturn(Optional.of(user));
         when(cartRepository.findByUser(user)).thenReturn(Optional.of(cart));
 
-
         // when
-        cartService.deleteItem(1L, session);
+        cartService.deleteItem(1L, user);
 
         // then
         assertThat(cart.getCartItems()).isEmpty();
     }
-    
+
     @Test
     @DisplayName("장바구니를 저장하고 사용자와 연결한다")
     void save() {
@@ -109,19 +104,17 @@ class CartServiceTest {
         User user = new User();
         user.setId(1L);
         Cart cart = new Cart();
-        MockHttpSession session = new MockHttpSession();
-        session.setAttribute("loginUser", user);
 
         when(userRepository.findById(1L)).thenReturn(Optional.of(user));
 
         // when
-        cartService.save(cart, session);
+        cartService.save(cart, user);
 
         // then
         verify(cartRepository).save(cart);
         assertThat(user.getCarts()).contains(cart);
     }
-    
+
     @Test
     @DisplayName("장바구니를 삭제한다")
     void deleteCart() {
@@ -130,7 +123,7 @@ class CartServiceTest {
         Long userId = 1L;
         User user = spy(new User());
         Cart cart = new Cart();
-        
+
         when(userRepository.findById(userId)).thenReturn(Optional.of(user));
         when(cartRepository.findById(cartId)).thenReturn(Optional.of(cart));
 

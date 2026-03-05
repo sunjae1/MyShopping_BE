@@ -13,7 +13,6 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.mock.web.MockHttpSession;
 
 import java.util.Optional;
 
@@ -43,13 +42,11 @@ class CommentServiceTest {
         Post post = new Post();
         CommentForm form = new CommentForm();
         form.setContent("New Comment");
-        MockHttpSession session = new MockHttpSession();
-        session.setAttribute("loginUser", user);
 
         when(postRepository.findById(postId)).thenReturn(Optional.of(post));
 
         // when
-        Comment comment = commentService.addComment(postId, form, session);
+        Comment comment = commentService.addComment(postId, form, user);
 
         // then
         assertThat(comment.getContent()).isEqualTo("New Comment");
@@ -64,12 +61,12 @@ class CommentServiceTest {
         Long postId = 1L;
         CommentForm form = new CommentForm();
         form.setContent("New Comment");
-        MockHttpSession session = new MockHttpSession();
+        User user = new User();
 
         when(postRepository.findById(postId)).thenReturn(Optional.empty());
 
         // when & then
-        assertThatThrownBy(() -> commentService.addComment(postId, form, session))
+        assertThatThrownBy(() -> commentService.addComment(postId, form, user))
                 .isInstanceOf(ResourceNotFoundException.class)
                 .hasMessage("Post Not Found");
     }
@@ -84,7 +81,6 @@ class CommentServiceTest {
         Comment comment = new Comment();
         comment.setId(commentId);
         post.addComment(comment);
-
 
         when(postRepository.findById(postId)).thenReturn(Optional.of(post));
         when(commentRepository.findById(commentId)).thenReturn(Optional.of(comment));

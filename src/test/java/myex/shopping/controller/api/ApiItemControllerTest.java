@@ -15,6 +15,7 @@ import org.springframework.http.HttpMethod;
 import org.springframework.http.MediaType;
 import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.io.IOException;
@@ -34,6 +35,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @SpringBootTest
 @AutoConfigureMockMvc
 @Transactional
+@WithMockUser
 class ApiItemControllerTest {
 
     @Autowired
@@ -44,7 +46,7 @@ class ApiItemControllerTest {
 
     @Autowired
     private ItemRepository itemRepository;
-    
+
     @MockBean
     private ImageService imageService;
 
@@ -66,7 +68,7 @@ class ApiItemControllerTest {
     @DisplayName("전체 상품 조회 API 테스트: GET /api/items")
     void getItems_shouldReturnItemList() throws Exception {
         mockMvc.perform(get("/api/items")
-                        .contentType(MediaType.APPLICATION_JSON))
+                .contentType(MediaType.APPLICATION_JSON))
                 .andDo(print())
                 .andExpect(status().isOk())
                 .andExpect(content().contentType(MediaType.APPLICATION_JSON))
@@ -82,7 +84,7 @@ class ApiItemControllerTest {
         Long itemId = testItem1.getId();
 
         mockMvc.perform(get("/api/items/{itemId}", itemId)
-                        .contentType(MediaType.APPLICATION_JSON))
+                .contentType(MediaType.APPLICATION_JSON))
                 .andDo(print())
                 .andExpect(status().isOk())
                 .andExpect(content().contentType(MediaType.APPLICATION_JSON))
@@ -97,23 +99,24 @@ class ApiItemControllerTest {
         Long nonExistentItemId = 99999L;
 
         mockMvc.perform(get("/api/items/{itemId}", nonExistentItemId)
-                        .contentType(MediaType.APPLICATION_JSON))
+                .contentType(MediaType.APPLICATION_JSON))
                 .andDo(print())
                 .andExpect(status().isNotFound());
     }
 
     @Test
-    @DisplayName("상품 추가 등록 API 테스트: POST /api/items/add")
+    @WithMockUser(roles = "ADMIN")
+    @DisplayName("상품 추가 등록 API 테스트: POST /api/items")
     void addItem_shouldCreateItem() throws Exception {
-        MockMultipartFile imageFile = new MockMultipartFile("imageFile", "test-image.jpg", "image/jpeg", "image_content".getBytes());
-        
-        mockMvc.perform(multipart("/api/items/add")
-                        .file(imageFile)
-                        .param("itemName", "새로운 상품")
-                        .param("price", "30000")
-                        .param("quantity", "20")
-                        .contentType(MediaType.MULTIPART_FORM_DATA)
-                )
+        MockMultipartFile imageFile = new MockMultipartFile("imageFile", "test-image.jpg", "image/jpeg",
+                "image_content".getBytes());
+
+        mockMvc.perform(multipart("/api/items")
+                .file(imageFile)
+                .param("itemName", "새로운 상품")
+                .param("price", "30000")
+                .param("quantity", "20")
+                .contentType(MediaType.MULTIPART_FORM_DATA))
                 .andDo(print())
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.itemName", is("새로운 상품")))
@@ -122,30 +125,32 @@ class ApiItemControllerTest {
     }
 
     @Test
-    @DisplayName("상품 수정 API 테스트: PUT /api/items/{itemId}/edit")
+    @WithMockUser(roles = "ADMIN")
+    @DisplayName("상품 수정 API 테스트: PUT /api/items/{id}")
     void editItem_shouldUpdateItem() throws Exception {
         Long itemId = testItem1.getId();
-        MockMultipartFile newImageFile = new MockMultipartFile("imageFile", "new-image.jpg", "image/jpeg", "new_image_content".getBytes());
+        MockMultipartFile newImageFile = new MockMultipartFile("imageFile", "new-image.jpg", "image/jpeg",
+                "new_image_content".getBytes());
 
-        mockMvc.perform(multipart(HttpMethod.PUT, "/api/items/{itemId}/edit", itemId)
-                        .file(newImageFile)
-                        .param("itemName", "수정된 상품 이름")
-                        .param("price", "12000")
-                        .param("quantity", "5")
-                        .contentType(MediaType.MULTIPART_FORM_DATA)
-                )
+        mockMvc.perform(multipart(HttpMethod.PUT, "/api/items/{itemId}", itemId)
+                .file(newImageFile)
+                .param("itemName", "수정된 상품 이름")
+                .param("price", "12000")
+                .param("quantity", "5")
+                .contentType(MediaType.MULTIPART_FORM_DATA))
                 .andDo(print())
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.itemName", is("수정된 상품 이름")))
                 .andExpect(jsonPath("$.price", is(12000)));
     }
-    
+
     @Test
-    @DisplayName("상품 삭제 API 테스트: DELETE /api/items/{itemId}/delete")
+    @WithMockUser(roles = "ADMIN")
+    @DisplayName("상품 삭제 API 테스트: DELETE /api/items/{id}")
     void deleteItem_shouldRemoveItem() throws Exception {
         Long itemId = testItem1.getId();
 
-        mockMvc.perform(delete("/api/items/{itemId}/delete", itemId))
+        mockMvc.perform(delete("/api/items/{itemId}", itemId))
                 .andDo(print())
                 .andExpect(status().isNoContent());
 

@@ -2,14 +2,15 @@ package myex.shopping;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import myex.shopping.domain.*;
+import myex.shopping.dto.userdto.LoginRequestDto;
+import myex.shopping.dto.userdto.PrincipalDetails;
 import myex.shopping.form.CartForm;
-import myex.shopping.form.ItemAddForm;
 import myex.shopping.form.PostForm;
 import myex.shopping.repository.ItemRepository;
 import myex.shopping.repository.OrderRepository;
-import myex.shopping.repository.PostRepository;
 import myex.shopping.repository.UserRepository;
 import myex.shopping.service.ImageService;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -18,6 +19,8 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.http.MediaType;
 import org.springframework.mock.web.MockHttpSession;
+import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 import org.springframework.transaction.annotation.Transactional;
@@ -26,6 +29,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.*;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.user;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultHandlers.print;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
@@ -35,191 +40,231 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @Transactional
 public class IntegrationTest {
 
-    @Autowired
-    private MockMvc mockMvc;
+        @Autowired
+        private MockMvc mockMvc;
 
-    @Autowired
-    private ObjectMapper objectMapper;
+        @Autowired
+        private ObjectMapper objectMapper;
 
-    @Autowired
-    private UserRepository userRepository;
-    
-    @Autowired
-    private ItemRepository itemRepository;
+        @Autowired
+        private UserRepository userRepository;
 
-    @Autowired
-    private OrderRepository orderRepository;
+        @Autowired
+        private ItemRepository itemRepository;
 
-    @MockBean
-    private ImageService imageService;
+        @Autowired
+        private OrderRepository orderRepository;
 
-    @Test
-    @DisplayName("사용자 전체 시나리오 통합 테스트: 회원가입 -> 로그인 -> 상품 추가 -> 장바구니 담기 -> 주문 -> 게시글 작성")
-    void fullUserJourneyTest() throws Exception {
-        when(imageService.storeFile(any())).thenReturn("/fake/path/image.jpg");
+        @Autowired
+        private PasswordEncoder passwordEncoder;
 
-        // 1. 회원가입
-        mockMvc.perform(post("/register")
-                        .contentType(MediaType.APPLICATION_FORM_URLENCODED)
-                        .param("name", "Test User")
-                        .param("email", "testuser@example.com")
-                        .param("password", "password")
-                )
-                .andExpect(status().is3xxRedirection())
-                .andExpect(redirectedUrl("/login"));
+        @MockBean
+        private ImageService imageService;
 
-        // 2. 로그인
-        MockHttpSession session = new MockHttpSession();
-        mockMvc.perform(post("/login")
-                        .contentType(MediaType.APPLICATION_FORM_URLENCODED)
-                        .param("email", "testuser@example.com")
-                        .param("password", "password")
-                        .session(session) // Pass session to login
-                )
-                .andExpect(status().is3xxRedirection())
-                .andExpect(redirectedUrl("/"))
-                .andExpect(request().sessionAttribute("loginUser", is(notNullValue())))
-                .andExpect(request().sessionAttribute("loginUser", isA(User.class)));
+        @BeforeEach
+        void setupUsersForApiLoginTests() {
+                if (userRepository.findByEmail("apiuser@example.com").isEmpty()) {
+                        User user1 = new User("apiuser@example.com", "Api User", passwordEncoder.encode("password"));
+                        user1.setActive(true);
+                        userRepository.save(user1);
+                }
+                if (userRepository.findByEmail("apiuser2@example.com").isEmpty()) {
+                        User user2 = new User("apiuser2@example.com", "Api User 2", passwordEncoder.encode("password"));
+                        user2.setActive(true);
+                        userRepository.save(user2);
+                }
+        }
 
+        @Test
+        @DisplayName("사용자 전체 시나리오 통합 테스트: 회원가입 -> 로그인 -> 상품 추가 -> 장바구니 담기 -> 주문 -> 게시글 작성")
+        void fullUserJourneyTest() throws Exception {
+                when(imageService.storeFile(any())).thenReturn("/fake/path/image.jpg");
 
-        // 3. 상품 추가 (웹 UI 통해)
-        MvcResult itemAddResult = mockMvc.perform(post("/items/add")
-                        .session(session) // Use the same session
-                        .contentType(MediaType.APPLICATION_FORM_URLENCODED)
-                        .param("itemName", "Test Item")
-                        .param("price", "10000")
-                        .param("quantity", "100")
-                )
-                .andExpect(status().is3xxRedirection())
-                .andReturn();
+                // 1. 회원가입 (CSRF 토큰 필요)
+                mockMvc.perform(post("/register")
+                                .with(csrf())
+                                .contentType(MediaType.APPLICATION_FORM_URLENCODED)
+                                .param("name", "Test User")
+                                .param("email", "testuser@example.com")
+                                .param("password", "password"))
+                                .andExpect(status().is3xxRedirection())
+                                .andExpect(redirectedUrl("/login"));
 
-        String redirectedUrl = itemAddResult.getResponse().getRedirectedUrl();
-        long itemId = Long.parseLong(redirectedUrl.substring(redirectedUrl.lastIndexOf('/') + 1));
+                // 2. 로그인 (폼 로그인 → SecurityContext에 PrincipalDetails 저장)
+                mockMvc.perform(post("/login")
+                                .with(csrf())
+                                .contentType(MediaType.APPLICATION_FORM_URLENCODED)
+                                .param("email", "testuser@example.com")
+                                .param("password", "password"))
+                                .andExpect(status().is3xxRedirection())
+                                .andExpect(redirectedUrl("/"));
 
-        // 3.1 추가된 상품 조회하여 확인
-        mockMvc.perform(get("/items/{itemId}", itemId).session(session))
-                .andExpect(status().isOk())
-                .andExpect(content().string(containsString("Test Item")));
+                // 로그인 후 사용자 조회하여 PrincipalDetails 생성 (아이템 추가를 위해 ADMIN 권한 강제 부여)
+                User loggedInUser = userRepository.findByEmail("testuser@example.com").orElseThrow();
+                loggedInUser.setRole(Role.ADMIN);
+                userRepository.save(loggedInUser);
+                PrincipalDetails principalDetails = new PrincipalDetails(loggedInUser);
 
-        // 4. 장바구니에 상품 담기
-        // [수정] RequestBody로 보낼 객체 생성
-        CartForm cartForm = new CartForm();
-        cartForm.setId(itemId);
-        cartForm.setQuantity(1); // 수량 설정 (재고 100개보다 적게)
+                // 웹 컨트롤러용 세션 생성 (session.getAttribute("loginUser") 사용하는 웹 컨트롤러 대응)
+                MockHttpSession session = new MockHttpSession();
+                session.setAttribute("loginUser", loggedInUser);
 
-        mockMvc.perform(post("/api/items/{itemId}/cart", itemId)
-                        .session(session)
-                        .contentType(MediaType.APPLICATION_JSON) // [수정] JSON 타입 명시
-                        .content(objectMapper.writeValueAsString(cartForm)) // [수정] Body 데이터 추가
-                )
-                .andDo(print()) // [팁] 디버깅을 위해 응답 로그 출력
-                .andExpect(status().isOk());
+                // 3. 상품 추가 (웹 UI 통해)
+                MvcResult itemAddResult = mockMvc.perform(post("/items/add")
+                                .with(user(principalDetails))
+                                .with(csrf())
+                                .session(session)
+                                .contentType(MediaType.APPLICATION_FORM_URLENCODED)
+                                .param("itemName", "Test Item")
+                                .param("price", "10000")
+                                .param("quantity", "100"))
+                                .andExpect(status().is3xxRedirection())
+                                .andReturn();
 
-        // 5. 주문하기
-        mockMvc.perform(post("/items/order")
-                        .session(session)
-                )
-                .andExpect(status().is3xxRedirection());
-        
-        // 5.1 마이페이지에서 주문 내역 확인
-         mockMvc.perform(get("/mypage").session(session))
-                .andExpect(status().isOk())
-                .andExpect(content().string(containsString("Test Item")));
+                String redirectedUrl = itemAddResult.getResponse().getRedirectedUrl();
+                long itemId = Long.parseLong(redirectedUrl.substring(redirectedUrl.lastIndexOf('/') + 1));
 
-        // 6. 게시글 작성
-        PostForm postForm = new PostForm();
-        postForm.setTitle("New Post Title");
-        postForm.setContent("This is the content of the new post.");
+                // 3.1 추가된 상품 조회하여 확인
+                mockMvc.perform(get("/items/{itemId}", itemId)
+                                .with(user(principalDetails)))
+                                .andExpect(status().isOk())
+                                .andExpect(content().string(containsString("Test Item")));
 
-        mockMvc.perform(post("/api/posts")
-                        .session(session)
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(postForm)))
-                .andExpect(status().isCreated())
-                .andExpect(jsonPath("$.title").value("New Post Title"));
-    }
+                // 4. 장바구니에 상품 담기 (API 엔드포인트)
+                CartForm cartForm = new CartForm();
+                cartForm.setId(itemId);
+                cartForm.setQuantity(1);
 
-    //보안 취약점 -> 수정 요구사항.
-    @Test
-    @DisplayName("보안 테스트: 인증 없이 상품 추가 가능 (multipart/form-data)")
-    void unauthorizedItemCreationTest() throws Exception {
-        when(imageService.storeFile(any())).thenReturn("/fake/path/unauthorized.jpg");
+                mockMvc.perform(post("/api/cart/items/{itemId}", itemId)
+                                .with(user(principalDetails))
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(objectMapper.writeValueAsString(cartForm)))
+                                .andDo(print())
+                                .andExpect(status().isOk());
 
-        // API 엔드포인트는 multipart/form-data를 소비하므로 .param()을 사용
-        MvcResult result = mockMvc.perform(multipart("/api/items/add")
-                        .param("itemName", "Unauthorized Item")
-                        .param("price", "5000")
-                        .param("quantity", "50")
-                )
-                .andExpect(status().isCreated())
-                .andReturn();
+                // 5. 주문하기 (웹 UI - session 사용)
+                mockMvc.perform(post("/items/order")
+                                .with(user(principalDetails))
+                                .with(csrf())
+                                .session(session))
+                                .andExpect(status().is3xxRedirection());
 
-        String createdUrl = result.getResponse().getHeader("Location");
-        
-        // 2. 생성된 아이템을 GET으로 조회하여 확인
-        mockMvc.perform(get(createdUrl))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.itemName").value("Unauthorized Item"));
-    }
+                // 5.1 마이페이지에서 주문 내역 확인
+                mockMvc.perform(get("/mypage")
+                                .with(user(principalDetails))
+                                .session(session))
+                                .andExpect(status().isOk())
+                                .andExpect(content().string(containsString("Test Item")));
 
-    @Test
-    @DisplayName("주문 취소 실패: 다른 사용자의 주문을 취소할 수 없다")
-    void cancelOrder_Fails_WhenUserIsNotOwner() throws Exception {
-        // given
-        // User A와 주문 생성
-        User userA = new User("userA@example.com", "User A", "password");
-        userRepository.save(userA);
-        Item item = new Item("Some Item", 100, 10, "path");
-        itemRepository.save(item);
-        Order order = new Order(userA);
-        order.addOrderItem(new OrderItem(item, item.getPrice(), 1));
-        orderRepository.save(order);
+                // 6. 게시글 작성 (API 엔드포인트)
+                PostForm postForm = new PostForm();
+                postForm.setTitle("New Post Title");
+                postForm.setContent("This is the content of the new post.");
 
-        // User B 생성 및 로그인
-        User userB = new User("userB@example.com", "User B", "password");
-        userRepository.save(userB);
-        MockHttpSession userBSession = new MockHttpSession(); //가짜 빈 세션
-        mockMvc.perform(post("/login")
-                .contentType(MediaType.APPLICATION_FORM_URLENCODED)
-                .param("email", "userB@example.com")
-                .param("password", "password")
-                .session(userBSession)); //가짜 세션 보내서 로그인 성공 시, 이 세션 안에 '로그인 한 userB의 정보' 저장해 돌려줌.
+                mockMvc.perform(post("/api/posts")
+                                .with(user(principalDetails))
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(objectMapper.writeValueAsString(postForm)))
+                                .andExpect(status().isCreated())
+                                .andExpect(jsonPath("$.title").value("New Post Title"));
+        }
 
-        // when & then
-        // User B가 User A의 주문 취소 시도
-        mockMvc.perform(post("/items/{id}/cancel", order.getId())
-                        .session(userBSession))
-                .andExpect(status().isForbidden());
-    }
+        @Test
+        @WithMockUser
+        @DisplayName("보안 테스트: 일반 사용자는 상품을 추가할 수 없다 (403 Forbidden)")
+        void unauthorizedItemCreationTest() throws Exception {
+                when(imageService.storeFile(any())).thenReturn("/fake/path/unauthorized.jpg");
 
-    @Test
-    @DisplayName("주문 취소 성공: 사용자가 자신의 주문을 취소한다")
-    void cancelOrder_Succeeds_WhenUserIsOwner() throws Exception {
-        // given
-        // User A와 주문 생성
-        User userA = new User("userA@example.com", "User A", "password");
-        userRepository.save(userA);
-        Item item = new Item("Some Item", 100, 10, "path");
-        itemRepository.save(item);
-        Order order = new Order(userA);
-        order.addOrderItem(new OrderItem(item, item.getPrice(), 1));
-        orderRepository.save(order);
+                mockMvc.perform(multipart("/api/items")
+                                .param("itemName", "Unauthorized Item")
+                                .param("price", "5000")
+                                .param("quantity", "50"))
+                                .andExpect(status().isForbidden());
+        }
 
-        // User A로 로그인
-        MockHttpSession userASession = new MockHttpSession();
-        mockMvc.perform(post("/login")
-                .contentType(MediaType.APPLICATION_FORM_URLENCODED)
-                .param("email", "userA@example.com")
-                .param("password", "password")
-                .session(userASession));
-        
-        // when & then
-        // User A가 자신의 주문 취소 시도
-        mockMvc.perform(post("/items/{id}/cancel", order.getId())
-                        .session(userASession))
-                .andExpect(status().is3xxRedirection());
-        
-        Order cancelledOrder = orderRepository.findById(order.getId()).orElseThrow();
-        assertThat(cancelledOrder.getStatus()).isEqualTo(OrderStatus.CANCELLED);
-    }
+        @Test
+        @DisplayName("주문 취소 실패: 다른 사용자의 주문을 취소할 수 없다")
+        void cancelOrder_Fails_WhenUserIsNotOwner() throws Exception {
+                User userA = new User("userA@example.com", "User A", "password");
+                userRepository.save(userA);
+                Item item = new Item("Some Item", 100, 10, "path");
+                itemRepository.save(item);
+                Order order = new Order(userA);
+                order.addOrderItem(new OrderItem(item, item.getPrice(), 1));
+                orderRepository.save(order);
+
+                User userB = new User("userB@example.com", "User B", "password");
+                userRepository.save(userB);
+                PrincipalDetails userBDetails = new PrincipalDetails(userB);
+
+                // 웹 컨트롤러용 세션
+                MockHttpSession userBSession = new MockHttpSession();
+                userBSession.setAttribute("loginUser", userB);
+
+                // User B가 User A의 주문 취소 시도
+                mockMvc.perform(post("/items/{id}/cancel", order.getId())
+                                .with(user(userBDetails))
+                                .with(csrf())
+                                .session(userBSession))
+                                .andExpect(status().isForbidden());
+        }
+
+        @Test
+        @DisplayName("주문 취소 성공: 사용자가 자신의 주문을 취소한다")
+        void cancelOrder_Succeeds_WhenUserIsOwner() throws Exception {
+                User userA = new User("userA@example.com", "User A", "password");
+                userRepository.save(userA);
+                Item item = new Item("Some Item", 100, 10, "path");
+                itemRepository.save(item);
+                Order order = new Order(userA);
+                order.addOrderItem(new OrderItem(item, item.getPrice(), 1));
+                orderRepository.save(order);
+
+                PrincipalDetails userADetails = new PrincipalDetails(userA);
+
+                // 웹 컨트롤러용 세션
+                MockHttpSession userASession = new MockHttpSession();
+                userASession.setAttribute("loginUser", userA);
+
+                // User A가 자신의 주문 취소 시도
+                mockMvc.perform(post("/items/{id}/cancel", order.getId())
+                                .with(user(userADetails))
+                                .with(csrf())
+                                .session(userASession))
+                                .andExpect(status().is3xxRedirection());
+
+                Order cancelledOrder = orderRepository.findById(order.getId()).orElseThrow();
+                assertThat(cancelledOrder.getStatus()).isEqualTo(OrderStatus.CANCELLED);
+        }
+
+        @Test
+        @WithMockUser
+        @DisplayName("API 로그인 성공 테스트")
+        void apiLogin_Success() throws Exception {
+                LoginRequestDto loginRequest = new LoginRequestDto();
+                loginRequest.setEmail("apiuser@example.com");
+                loginRequest.setPassword("password");
+
+                mockMvc.perform(post("/api/login")
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(objectMapper.writeValueAsString(loginRequest)))
+                                .andExpect(status().isOk())
+                                .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_JSON))
+                                .andExpect(jsonPath("$.email").value("apiuser@example.com"))
+                                .andExpect(jsonPath("$.name").value("Api User"));
+        }
+
+        @Test
+        @WithMockUser
+        @DisplayName("API 로그인 실패 테스트: 잘못된 비밀번호")
+        void apiLogin_Fails_WithWrongPassword() throws Exception {
+                LoginRequestDto loginRequest = new LoginRequestDto();
+                loginRequest.setEmail("apiuser2@example.com");
+                loginRequest.setPassword("wrongpassword");
+
+                mockMvc.perform(post("/api/login")
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(objectMapper.writeValueAsString(loginRequest)))
+                                .andExpect(status().isUnauthorized());
+        }
 }

@@ -1,5 +1,6 @@
 <!DOCTYPE html>
-<html xmlns:th="http://www.thymeleaf.org">
+<html xmlns:th="http://www.thymeleaf.org"
+      xmlns:sec="http://www.thymeleaf.org/extras/spring-security">
 <nav th:fragment="nav">
     <div class="nav-links">
         <a th:href="@{/}">홈</a>
@@ -19,17 +20,18 @@
             </button>
             <div class="dropdown-menu">
                 <!-- 로그인 안된 경우 -->
-                <div th:if="${session.loginUser == null}">
+                <div sec:authorize="isAnonymous()">
                     <a th:href="@{/login}" class="dropdown-item">로그인</a>
                     <a th:href="@{/register}" class="dropdown-item">회원가입</a>
                 </div>
                 <!-- 로그인 된 경우 -->
-                <div th:if="${session.loginUser != null}">
-                    <div class="dropdown-header" th:text="${session.loginUser.name} + '님'">사용자 이름</div>
+                <div sec:authorize="isAuthenticated()">
+                    <div class="dropdown-header" th:text="${#authentication.principal.username} + '님'">사용자 이름</div>
                     <a th:href="@{/mypage}" class="dropdown-item">마이 페이지</a>
                     <a th:href="@{/items/orderAll}" class="dropdown-item">주문 내역</a>
                     <form th:action="@{/logout}" method="post">
                         <button type="submit" class="dropdown-item btn-link">로그아웃</button>
+                        <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}" />
                     </form>
                 </div>
             </div>

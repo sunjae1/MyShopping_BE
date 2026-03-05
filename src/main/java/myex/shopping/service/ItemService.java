@@ -33,9 +33,8 @@ public class ItemService {
     private final EntityManager em;
 
     @Transactional(readOnly = false)
-    public Item update(Long itemId, Item updateParam)
-    {
-        //영속성 컨텍스트가 관리. (Dirty Checking)
+    public Item update(Long itemId, Item updateParam) {
+        // 영속성 컨텍스트가 관리. (Dirty Checking)
         Item item = itemRepository.findById(itemId)
                 .orElseThrow(() -> new IllegalArgumentException("해당 상품을 찾을 수 없습니다."));
         item.setItemName(updateParam.getItemName());
@@ -46,7 +45,7 @@ public class ItemService {
         return item;
     }
 
-    //id itemName, price, quantity (url 없음)
+    // id itemName, price, quantity (url 없음)
     @Transactional(readOnly = true)
     public List<ItemDto> findAllToDto() {
         return itemRepository.findAll()
@@ -66,7 +65,7 @@ public class ItemService {
     public Long createItem(ItemAddForm form) throws IOException {
         String imageUrl = imageService.storeFile(form.getImageFile());
         Item item = new Item();
-        //기본 필드 및 이미지 URL 저장.
+        // 기본 필드 및 이미지 URL 저장.
         item.setItemName(form.getItemName());
         item.setPrice(form.getPrice());
         item.setQuantity(form.getQuantity());
@@ -92,6 +91,13 @@ public class ItemService {
         return item.getId();
     }
 
+    @Transactional
+    public void deleteItem(Long itemId) {
+        itemRepository.findById(itemId)
+                .orElseThrow(() -> new ResourceNotFoundException("item not found"));
+        itemRepository.deleteItem(itemId);
+    }
+
     public List<ItemDto> findSearchByNameDto(String keyword) {
         return itemRepository.searchByName(keyword)
                 .stream()
@@ -106,30 +112,30 @@ public class ItemService {
                 .collect(Collectors.toList());
     }
 
-    //키워드 검색 && 카테고리 로 아이템 검색
+    // 키워드 검색 && 카테고리 로 아이템 검색
     public List<ItemDto> findItems(String keyword, Long categoryId) {
-        //카테고리 && 검색어 둘 다 있는경우
+        // 카테고리 && 검색어 둘 다 있는경우
         if (StringUtils.hasText(keyword) && categoryId != null) {
             return itemRepository.findByCategoryAndName(categoryId, keyword)
                     .stream()
                     .map(ItemDto::new)
                     .collect(Collectors.toList());
         }
-        //검색어만 있는 경우
+        // 검색어만 있는 경우
         else if (StringUtils.hasText(keyword)) {
             return itemRepository.searchByName(keyword)
                     .stream()
                     .map(ItemDto::new)
                     .collect(Collectors.toList());
         }
-        //카테고리만 있는 경우
+        // 카테고리만 있는 경우
         else if (categoryId != null) {
             return itemRepository.findByCategory(categoryId)
                     .stream()
                     .map(ItemDto::new)
                     .collect(Collectors.toList());
         }
-        //둘 다 없는 경우.
+        // 둘 다 없는 경우.
         else {
             return itemRepository.findAll()
                     .stream()
