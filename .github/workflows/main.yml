@@ -90,11 +90,25 @@ jobs:
           if [ ! -z \"\$NEW_PID\" ]; then kill -9 \$NEW_PID; fi
 
           # 3. 새 JAR 실행 (Blue/Green 용) - 심볼릭 링크(shopping-current.jar) 바라보게 함
+          source ~/.bashrc
           nohup java -jar -Dspring.profiles.active=prod /home/ubuntu/shopping-current.jar --server.port=\$NEW_PORT > /home/ubuntu/shopping-app.log 2>&1 &
           
-          # 4. 헬스 체크 (15초 대기)
-          echo \"서버 시작 대기 중...\"
-          sleep 15
+          # 4. 헬스 체크 (새로운 애플리케이션 시작 완전 대기, 최대 120초)
+          echo \"새로운 \$NEW_PORT 포트 서버 시작 대기 중...\"
+          for i in \$(seq 1 60); do
+            # 간단히 포트에 HTTP 접속이 가능한지 응답 코드로 확인
+            HTTP_CODE=\$(curl -s -o /dev/null -w \"%{http_code}\" http://localhost:\$NEW_PORT/)
+            if [ \"\$HTTP_CODE\" != \"000\" ]; then
+              echo \"✅ \$NEW_PORT 포트 서버가 켜졌습니다! (응답 코드: \$HTTP_CODE)\"
+              break
+            fi
+            if [ \$i -eq 60 ]; then
+              echo \"❌ 서버 시작 시간이 초과되었습니다 (120초). 배포 실패!\"
+              exit 1
+            fi
+            echo \"서버가 아직 켜지지 않았습니다. 2초 대기... (\$i/60)\"
+            sleep 2
+          done
 
           # 5. Nginx 포트 변경
           # (myapp.template 파일이 /etc/nginx/sites-available/ 에 있어야 함)
