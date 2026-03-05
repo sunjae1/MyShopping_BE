@@ -59,12 +59,18 @@ jobs:
     # 6️⃣ JAR 업로드
     - name: Upload JAR to EC2
       run: |
-        scp -i ~/.ssh/id_rsa build/libs/shopping-0.0.1-SNAPSHOT.jar ubuntu@${{ secrets.EC2_HOST }}:/home/ubuntu/app_new.jar
+        scp -i ~/.ssh/id_rsa build/libs/shopping-0.0.1-SNAPSHOT.jar ubuntu@${{ secrets.EC2_HOST }}:/home/ubuntu/shopping-latest.jar
 
-    # 7️⃣ Blue-Green 무중단 배포 + 부팅 파일 갱신
+    # 7️⃣ Blue-Green 무중단 배포 및 타임스탬프 롤백 구성
     - name: Deploy with Blue-Green Toggle
       run: |
         ssh -i ~/.ssh/id_rsa ubuntu@${{ secrets.EC2_HOST }} "
+          # 0. 타임스탬플 기준으로 새 파일명 만들고 심볼릭 링크 연결
+          TIMESTAMP=\$(date +%Y%m%d-%H%M%S)
+          NEW_JAR=\"/home/ubuntu/shopping-\$TIMESTAMP.jar\"
+          mv /home/ubuntu/shopping-latest.jar \$NEW_JAR
+          ln -sf \$NEW_JAR /home/ubuntu/shopping-current.jar
+
           # [중요] Systemd가 실행 중이라면 잠시 멈춤 (Blue/Green과 충돌 방지)
           sudo systemctl stop portfolio.service || true
 
@@ -83,10 +89,10 @@ jobs:
           NEW_PID=\$(lsof -t -i:\$NEW_PORT)
           if [ ! -z \"\$NEW_PID\" ]; then kill -9 \$NEW_PID; fi
 
-          # 3. 새 JAR 실행 (Blue/Green 용)
-          nohup java -jar -Dspring.profiles.active=prod /home/ubuntu/app_new.jar --server.port=\$NEW_PORT > /home/ubuntu/app.log 2>&1 &
+          # 3. 새 JAR 실행 (Blue/Green 용) - 심볼릭 링크(shopping-current.jar) 바라보게 함
+          nohup java -jar -Dspring.profiles.active=prod /home/ubuntu/shopping-current.jar --server.port=\$NEW_PORT > /home/ubuntu/shopping-app.log 2>&1 &
           
-          # 4. 헬스 체크 (10초 대기)
+          # 4. 헬스 체크 (15초 대기)
           echo \"서버 시작 대기 중...\"
           sleep 15
 
@@ -99,8 +105,8 @@ jobs:
           OLD_PID=\$(lsof -t -i:\$CURRENT_PORT)
           if [ ! -z \"\$OLD_PID\" ]; then kill -9 \$OLD_PID; fi
 
-          # [핵심 추가] 다음번 '재부팅'을 위해 최신 JAR를 덮어쓰기
-          cp /home/ubuntu/app_new.jar /home/ubuntu/app_boot.jar
+          # 7. 이전 배포 파일 정리 (최근 5개 버전만 남기고 과거 백업본은 삭제)
+          ls -dt /home/ubuntu/shopping-20*.jar | tail -n +6 | xargs -r rm --
           
-          echo \"배포 완료: 현재 서비스 포트 \$NEW_PORT\"
+          echo \"배포 완료: 현재 서비스 포트 \$NEW_PORT, 실행 파일: \$NEW_JAR\"
         "

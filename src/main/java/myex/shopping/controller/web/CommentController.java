@@ -30,51 +30,52 @@ public class CommentController {
     private final CommentService commentService;
     private final PostService postService;
 
-    //댓글 추가
+    // 댓글 추가
     @PostMapping("/{postId}/comments")
     public String addComment(@PathVariable Long postId,
-                             @Valid @ModelAttribute CommentForm form,
-                             BindingResult bindingResult,
-                             HttpSession session,
-                             Model model) {
-        User loginUser = (User) session.getAttribute("loginUser");
-        if (loginUser != null) {
-            UserDto userDto = new UserDto(loginUser);
-            model.addAttribute("user",userDto);
-            model.addAttribute("loginUser",userDto);
-        }
-        //ModelAttribute는 {postId} 경로변수도 객체 멤버변수에 있으면 바인딩 가능.
-        log.info("로그인 유저 : {}", loginUser);
-        log.info("CommentForm  정보 : {}",form);
-        if (bindingResult.hasErrors()) {
-            log.info("댓글 폼 검증 오류 : {}",bindingResult);
-            PostDBDto postDBDto = postService.changeToDto(postId);
-            model.addAttribute("post", postDBDto);
-            return "posts/view";
-        }
-        commentService.addComment(postId, form, session);
-        return "redirect:/posts/{postId}";
-    }
-    //댓글 수정
-    @PostMapping("/{postId}/comments/{commentId}/update")
-    public String updateComment(@PathVariable Long postId,
-                                @PathVariable Long commentId,
-                                @Valid @ModelAttribute("commentToUpdate") CommentForm form,
-                                BindingResult bindingResult,
-                                HttpSession session,
-                                Model model) {
-        //폼 바인딩 확인
-        log.info("CommentForm 정보: {}",form);
-        //로그인 확인
+            @Valid @ModelAttribute CommentForm form,
+            BindingResult bindingResult,
+            HttpSession session,
+            Model model) {
         User loginUser = (User) session.getAttribute("loginUser");
         if (loginUser != null) {
             UserDto userDto = new UserDto(loginUser);
             model.addAttribute("user", userDto);
-            model.addAttribute("loginUser",userDto);
+            model.addAttribute("loginUser", userDto);
         }
-        //검증 로직
+        // ModelAttribute는 {postId} 경로변수도 객체 멤버변수에 있으면 바인딩 가능.
+        log.info("로그인 유저 : {}", loginUser);
+        log.info("CommentForm  정보 : {}", form);
         if (bindingResult.hasErrors()) {
-            log.info("댓글 수정 폼 검증 오류 : {}",bindingResult);
+            log.info("댓글 폼 검증 오류 : {}", bindingResult);
+            PostDBDto postDBDto = postService.changeToDto(postId);
+            model.addAttribute("post", postDBDto);
+            return "posts/view";
+        }
+        commentService.addComment(postId, form, loginUser);
+        return "redirect:/posts/{postId}";
+    }
+
+    // 댓글 수정
+    @PostMapping("/{postId}/comments/{commentId}/update")
+    public String updateComment(@PathVariable Long postId,
+            @PathVariable Long commentId,
+            @Valid @ModelAttribute("commentToUpdate") CommentForm form,
+            BindingResult bindingResult,
+            HttpSession session,
+            Model model) {
+        // 폼 바인딩 확인
+        log.info("CommentForm 정보: {}", form);
+        // 로그인 확인
+        User loginUser = (User) session.getAttribute("loginUser");
+        if (loginUser != null) {
+            UserDto userDto = new UserDto(loginUser);
+            model.addAttribute("user", userDto);
+            model.addAttribute("loginUser", userDto);
+        }
+        // 검증 로직
+        if (bindingResult.hasErrors()) {
+            log.info("댓글 수정 폼 검증 오류 : {}", bindingResult);
             PostDBDto postDBDto = postService.changeToDto(postId);
             model.addAttribute("post", postDBDto);
             model.addAttribute("errorCommentId", commentId);
@@ -83,27 +84,26 @@ public class CommentController {
             model.addAttribute("commentForm", new CommentForm());
             return "/posts/view";
         }
-        //작성자 본인만 수정 가능.
-        if (commentService.isCommentOwner(commentId, loginUser))
-        {
+        // 작성자 본인만 수정 가능.
+        if (commentService.isCommentOwner(commentId, loginUser)) {
             commentService.updateComment(commentId, form, loginUser.getId());
             log.info("댓글 수정 메소드 후 commentService.updateComment 후");
         }
         return "redirect:/posts/{postId}";
     }
 
-    //댓글 삭제
+    // 댓글 삭제
     @PostMapping("/{postId}/comments/{commentId}")
     public String deleteComment(@PathVariable Long postId,
-                                @PathVariable Long commentId,
-                                HttpSession session,
-                                Model model) {
+            @PathVariable Long commentId,
+            HttpSession session,
+            Model model) {
         User loginUser = (User) session.getAttribute("loginUser");
-        //작성자 본인만 삭제 가능
+        // 작성자 본인만 삭제 가능
         if (commentService.isCommentOwner(commentId, loginUser)) {
             commentService.deleteComment(postId, commentId);
         }
-        //삭제 성공&실패와 상관없이 다시 게시글 상세 페이지로
+        // 삭제 성공&실패와 상관없이 다시 게시글 상세 페이지로
         return "redirect:/posts/{postId}";
     }
 }
