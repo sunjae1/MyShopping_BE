@@ -98,7 +98,11 @@ jobs:
             # 2. 새 이미지 Pull
             sudo docker pull ${{ secrets.DOCKERHUB_USERNAME }}/shopping-app:latest
           
-            # 3. 새 컨테이너 실행
+            # 새 컨테이너 실행
+            # .env 파일에서 변수 읽어오기 (SPRING_DATASOURCE_URL 등으로 매핑을 위해)
+            # -e 옵션 뒤에 변수명을 쓰면 현재 쉘의 환경 변수 값이 컨테이너로 전달됩니다.
+            export \$(sudo grep -v '^#' /home/ubuntu/shopping-app/.env | xargs)
+
             # 기존 컨테이너가 있다면 삭제 (강제 종료 후 삭제)
             sudo docker rm -f \$NEW_CONTAINER || true
           
@@ -118,9 +122,9 @@ jobs:
               --link shopping-db:db \
               --env-file /home/ubuntu/shopping-app/.env \
               -e SPRING_PROFILES_ACTIVE=prod \
-              -e SPRING_DATASOURCE_URL=\$DB_URL \
-              -e SPRING_DATASOURCE_USERNAME=\$DB_USERNAME \
-              -e SPRING_DATASOURCE_PASSWORD=\$DB_PASSWORD \
+              -e SPRING_DATASOURCE_URL=\"\$DB_URL\" \
+              -e SPRING_DATASOURCE_USERNAME=\"\$DB_USERNAME\" \
+              -e SPRING_DATASOURCE_PASSWORD=\"\$DB_PASSWORD\" \
               -v /home/ubuntu/shopping-app/UploadFolder:/app/UploadFolder \
               ${{ secrets.DOCKERHUB_USERNAME }}/shopping-app:latest
           
