@@ -37,9 +37,9 @@ public class ItemController {
     // 전체 아이템 조회 (+검색 추가)
     @GetMapping
     public String items(Model model,
-            @RequestParam(required = false) String keyword,
-            @RequestParam(required = false) Long categoryId,
-            HttpSession session) {
+                        @RequestParam(required = false) String keyword,
+                        @RequestParam(required = false) Long categoryId,
+                        HttpSession session) {
         User loginUser = (User) session.getAttribute("loginUser");
         if (loginUser != null) {
             UserDto userDto = new UserDto(loginUser);
@@ -53,8 +53,7 @@ public class ItemController {
     // 개별 아이템 조회
     @GetMapping("/{itemId}")
     public String item(@PathVariable long itemId, Model model,
-            RedirectAttributes redirectAttributes,
-            HttpSession session) {
+                       HttpSession session) {
         User loginUser = (User) session.getAttribute("loginUser");
         if (loginUser != null) {
             UserDto userDto = new UserDto(loginUser);
@@ -72,7 +71,7 @@ public class ItemController {
     @PreAuthorize("hasRole('ADMIN')")
     @GetMapping("/add")
     public String addForm(Model model,
-            HttpSession session) {
+                          HttpSession session) {
         User loginUser = (User) session.getAttribute("loginUser");
         if (loginUser != null) {
             UserDto userDto = new UserDto(loginUser);
@@ -87,11 +86,12 @@ public class ItemController {
     @PreAuthorize("hasRole('ADMIN')")
     @PostMapping("/add")
     public String addItem(@Valid @ModelAttribute("item") ItemAddForm form,
-            BindingResult bindingResult,
-            RedirectAttributes redirectAttributes) throws IOException {
+                          BindingResult bindingResult,
+                          RedirectAttributes redirectAttributes) throws IOException {
         // 업로드 시 UploadFolder 에 있는 사진 업로드 시도 하면, "같은 경로 + 같은 파일명" 이라 같다고 판단해 move
         // 불가능.(오류 발생. -> UUID로 바꿀시, "같은 경로 + 다른 파일명" 이라 다른 파일이라 판단하고 업로드 가능.
         // "다른 경로 + 같은 파일명" : 덮어쓰기.
+        validateImageFile(form, bindingResult);
         if (bindingResult.hasErrors()) {
             log.info("상품 폼 검증 실패 : {}", bindingResult);
             return "items/addForm";
@@ -101,12 +101,19 @@ public class ItemController {
         return "redirect:/items/{itemId}";
     }
 
+    private void validateImageFile(ItemAddForm form, BindingResult bindingResult) {
+        if ((form.getImageFile() == null || form.getImageFile().isEmpty())
+                && !bindingResult.hasFieldErrors("imageFile")) {
+            bindingResult.rejectValue("imageFile", "required", "상품 이미지를 선택해주세요.");
+        }
+    }
+
     // 아이템 수정 폼.
     @PreAuthorize("hasRole('ADMIN')")
     @GetMapping("/{itemId}/edit")
     public String editForm(@PathVariable("itemId") Long itemId,
-            Model model,
-            HttpSession session) {
+                           Model model,
+                           HttpSession session) {
         Item item = itemRepository.findById(itemId)
                 .orElseThrow(() -> new ResourceNotFoundException("item not found"));
         User loginUser = (User) session.getAttribute("loginUser");
@@ -122,8 +129,8 @@ public class ItemController {
     @PreAuthorize("hasRole('ADMIN')")
     @PostMapping("/{itemId}/edit")
     public String edit(@PathVariable Long itemId,
-            @Valid @ModelAttribute("item") ItemEditForm form,
-            BindingResult bindingResult) throws IOException {
+                       @Valid @ModelAttribute("item") ItemEditForm form,
+                       BindingResult bindingResult) throws IOException {
         log.info("아이템 수정 요청 컨트롤러 진입");
         log.info("form 정보 : {}", form);
         if (bindingResult.hasErrors()) {

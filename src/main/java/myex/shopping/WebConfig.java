@@ -2,9 +2,8 @@ package myex.shopping;
 
 import lombok.RequiredArgsConstructor;
 import myex.shopping.interceptor.LoginCheckInterceptor;
-import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.web.servlet.config.annotation.InterceptorRegistry;
 import org.springframework.web.servlet.config.annotation.ResourceHandlerRegistry;
 import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 
@@ -12,19 +11,23 @@ import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 @RequiredArgsConstructor
 public class WebConfig implements WebMvcConfigurer {
 
+    @SuppressWarnings("FieldCanBeLocal")
     private final LoginCheckInterceptor loginCheckInterceptor;
 
+    @Value("${file.dir:./UploadFolder/}")
+    private String uploadDir;
 
     @Override
     public void addResourceHandlers(ResourceHandlerRegistry registry) {
+        String normalizedUploadDir = uploadDir.endsWith("/") ? uploadDir : uploadDir + "/";
 
-        // "/img/**" 요청 ==> "uploads/" 폴더
+        // "/img/**" 요청 ==> 업로드 폴더
         registry.addResourceHandler("/img/**")
-                .addResourceLocations("file:../UploadFolder/");
+                .addResourceLocations("file:" + normalizedUploadDir);
 
-                 registry.addResourceHandler("/**").addResourceLocations("classpath:/static/");
+        registry.addResourceHandler("/**").addResourceLocations("classpath:/static/");
     }
-    
+
     //인터셉터 등록
  /*   public void addInterceptors(InterceptorRegistry registry) {
         registry.addInterceptor(loginCheckInterceptor)

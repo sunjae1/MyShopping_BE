@@ -1,10 +1,10 @@
 package myex.shopping.service;
 
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
-import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -15,7 +15,8 @@ import java.util.UUID;
 @Service
 public class ImageService {
 
-    private String uploadDir = Paths.get(System.getProperty("user.dir"), "src", "main", "resources", "static", "img").toString();
+    @Value("${file.dir:./UploadFolder/}")
+    private String uploadDir;
 
 
     public String storeFile(MultipartFile multipartFile) throws IOException {
@@ -23,19 +24,12 @@ public class ImageService {
             return null;
         }
 
-        uploadDir = "../UploadFolder/";
-        Path uploadPath = Paths.get(uploadDir).toAbsolutePath();
-
-        System.out.println("uploadDir = " + uploadDir);
-        // Create upload directory if it doesn't exist
-        File uploadDirFile = new File(uploadDir);
-        if (!uploadDirFile.exists()) {
-            uploadDirFile.mkdirs();
-        }
+        Path uploadPath = Paths.get(uploadDir).toAbsolutePath().normalize();
+        Files.createDirectories(uploadPath);
+        log.info("uploadDir = {}", uploadPath);
 
         String originalFilename = multipartFile.getOriginalFilename();
         String storeFileName = createStoreFileName(originalFilename);
-//        Path filePath = Paths.get(uploadDir, storeFileName);
         Path filePath = uploadPath.resolve(storeFileName);
 
         multipartFile.transferTo(filePath);

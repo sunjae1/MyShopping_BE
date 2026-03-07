@@ -1,13 +1,6 @@
 spring:
-  profiles:
-    active: dev
+  application:
+    name: shopping
 
-springdoc:
-  api-docs:
-    enabled: true
-  swagger-ui:
-    urls:
-      - name: 자동 생성 API
-        url: /v3/api-docs
-      - name: 수동 작성 문서
-        url: /openapi.yaml
+file:
+  dir: ./UploadFolder/

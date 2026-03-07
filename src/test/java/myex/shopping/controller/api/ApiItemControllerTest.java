@@ -1,6 +1,5 @@
 package myex.shopping.controller.api;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import myex.shopping.domain.Item;
 import myex.shopping.repository.ItemRepository;
 import myex.shopping.service.ImageService;
@@ -10,25 +9,22 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.MediaType;
 import org.springframework.mock.web.MockMultipartFile;
-import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.security.test.context.support.WithMockUser;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
+import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.io.IOException;
-import java.nio.charset.StandardCharsets;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.hasSize;
 import static org.hamcrest.Matchers.is;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultHandlers.print;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
@@ -42,12 +38,9 @@ class ApiItemControllerTest {
     private MockMvc mockMvc;
 
     @Autowired
-    private ObjectMapper objectMapper;
-
-    @Autowired
     private ItemRepository itemRepository;
 
-    @MockBean
+    @MockitoBean
     private ImageService imageService;
 
     private Item testItem1;
@@ -68,7 +61,7 @@ class ApiItemControllerTest {
     @DisplayName("전체 상품 조회 API 테스트: GET /api/items")
     void getItems_shouldReturnItemList() throws Exception {
         mockMvc.perform(get("/api/items")
-                .contentType(MediaType.APPLICATION_JSON))
+                        .contentType(MediaType.APPLICATION_JSON))
                 .andDo(print())
                 .andExpect(status().isOk())
                 .andExpect(content().contentType(MediaType.APPLICATION_JSON))
@@ -84,7 +77,7 @@ class ApiItemControllerTest {
         Long itemId = testItem1.getId();
 
         mockMvc.perform(get("/api/items/{itemId}", itemId)
-                .contentType(MediaType.APPLICATION_JSON))
+                        .contentType(MediaType.APPLICATION_JSON))
                 .andDo(print())
                 .andExpect(status().isOk())
                 .andExpect(content().contentType(MediaType.APPLICATION_JSON))
@@ -99,7 +92,7 @@ class ApiItemControllerTest {
         Long nonExistentItemId = 99999L;
 
         mockMvc.perform(get("/api/items/{itemId}", nonExistentItemId)
-                .contentType(MediaType.APPLICATION_JSON))
+                        .contentType(MediaType.APPLICATION_JSON))
                 .andDo(print())
                 .andExpect(status().isNotFound());
     }
@@ -112,11 +105,11 @@ class ApiItemControllerTest {
                 "image_content".getBytes());
 
         mockMvc.perform(multipart("/api/items")
-                .file(imageFile)
-                .param("itemName", "새로운 상품")
-                .param("price", "30000")
-                .param("quantity", "20")
-                .contentType(MediaType.MULTIPART_FORM_DATA))
+                        .file(imageFile)
+                        .param("itemName", "새로운 상품")
+                        .param("price", "30000")
+                        .param("quantity", "20")
+                        .contentType(MediaType.MULTIPART_FORM_DATA))
                 .andDo(print())
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.itemName", is("새로운 상품")))
@@ -133,11 +126,11 @@ class ApiItemControllerTest {
                 "new_image_content".getBytes());
 
         mockMvc.perform(multipart(HttpMethod.PUT, "/api/items/{itemId}", itemId)
-                .file(newImageFile)
-                .param("itemName", "수정된 상품 이름")
-                .param("price", "12000")
-                .param("quantity", "5")
-                .contentType(MediaType.MULTIPART_FORM_DATA))
+                        .file(newImageFile)
+                        .param("itemName", "수정된 상품 이름")
+                        .param("price", "12000")
+                        .param("quantity", "5")
+                        .contentType(MediaType.MULTIPART_FORM_DATA))
                 .andDo(print())
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.itemName", is("수정된 상품 이름")))
@@ -155,5 +148,19 @@ class ApiItemControllerTest {
                 .andExpect(status().isNoContent());
 
         assertThat(itemRepository.findById(itemId)).isEmpty();
+    }
+
+    @Test
+    @WithMockUser(roles = "ADMIN")
+    @DisplayName("상품 이미지 없이 등록하면 400을 반환한다")
+    void addItem_shouldReturnBadRequest_whenImageFileIsMissing() throws Exception {
+        mockMvc.perform(multipart("/api/items")
+                        .param("itemName", "이미지 없는 상품")
+                        .param("price", "30000")
+                        .param("quantity", "20")
+                        .contentType(MediaType.MULTIPART_FORM_DATA))
+                .andDo(print())
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.imageFile", is("상품 이미지를 선택해주세요.")));
     }
 }

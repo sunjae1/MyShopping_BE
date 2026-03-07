@@ -41,3 +41,6 @@ out/
 
 # Gemini
 .gemini
+
+# Image Folder
+UploadFolder
