@@ -8,120 +8,142 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
     steps:
-    # 1️⃣ AWS 자격 증명 설정 (EC2 켜기 위해 필요)
-    - name: Configure AWS Credentials
-      uses: aws-actions/configure-aws-credentials@v4
-      with:
-        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-        aws-region: ap-northeast-2 # 본인 리전
+      # 1️⃣ AWS 자격 증명 설정 (EC2 켜기 위해 필요)
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ap-northeast-2 # 본인 리전
 
-    # 2️⃣ EC2 깨우기 및 대기 (핵심 추가!!)
-    - name: Start EC2 Instance
-      run: |
-        echo "EC2 인스턴스 상태 확인 중..."
-        STATE=$(aws ec2 describe-instances --instance-ids ${{ secrets.EC2_INSTANCE_ID }} --query "Reservations[0].Instances[0].State.Name" --output text)
-        if [ "$STATE" != "running" ]; then
-          echo "인스턴스가 꺼져있습니다. 시작합니다..."
-          aws ec2 start-instances --instance-ids ${{ secrets.EC2_INSTANCE_ID }}
-          # 1차 대기 : AWS 콘솔상 Running이 뜰 때까지
-          aws ec2 wait instance-running --instance-ids ${{ secrets.EC2_INSTANCE_ID }}
-          echo "AWS Instance Running 상태 도달. 이제 SSH 포트 오픈을 대기합니다..."
-        else
-          echo "인스턴스가 이미 실행 중입니다."
-        fi
-        # 무조건 22번 포트가 열릴 때까지 5초 간격으로 찔러보기
-        #nc(netcat) 명령어로 호스트의 22번 포트 스캔
-        while ! nc -z -v -w 5 ${{ secrets.EC2_HOST }} 22; do
-          echo "SSH 포트가 아직 닫혀있습니다. 5초 뒤 재시도..."
-          sleep 5
-        done
-        echo "SSH 포트 연결 확인 완료! 다음 단계로 진행합니다."
-
-    # 3️⃣ 코드 체크아웃
-    - name: Checkout Code
-      uses: actions/checkout@v3
-
-    # 4️⃣ Gradle 빌드
-    - name: Build Spring Boot JAR
-      run: |
-        chmod +x ./gradlew
-        ./gradlew clean build -x test
-
-    # 5️⃣ SSH 키 설정
-    - name: Set up SSH Key
-      run: |
-        mkdir -p ~/.ssh
-        echo "${{ secrets.EC2_KEY }}" > ~/.ssh/id_rsa
-        chmod 600 ~/.ssh/id_rsa
-        ssh-keyscan -H ${{ secrets.EC2_HOST }} >> ~/.ssh/known_hosts
-
-    # 6️⃣ JAR 업로드
-    - name: Upload JAR to EC2
-      run: |
-        scp -i ~/.ssh/id_rsa build/libs/shopping-0.0.1-SNAPSHOT.jar ubuntu@${{ secrets.EC2_HOST }}:/home/ubuntu/shopping-latest.jar
-
-    # 7️⃣ Blue-Green 무중단 배포 및 타임스탬프 롤백 구성
-    - name: Deploy with Blue-Green Toggle
-      run: |
-        ssh -i ~/.ssh/id_rsa ubuntu@${{ secrets.EC2_HOST }} "
-          # 0. 타임스탬플 기준으로 새 파일명 만들고 심볼릭 링크 연결
-          TIMESTAMP=\$(date +%Y%m%d-%H%M%S)
-          NEW_JAR=\"/home/ubuntu/shopping-\$TIMESTAMP.jar\"
-          mv /home/ubuntu/shopping-latest.jar \$NEW_JAR
-          ln -sf \$NEW_JAR /home/ubuntu/shopping-current.jar
-
-          # [중요] Systemd가 실행 중이라면 잠시 멈춤 (Blue/Green과 충돌 방지)
-          sudo systemctl stop portfolio.service || true
-
-          # 1. 현재 포트 확인
-          CURRENT_PORT=\$(grep -o '808[0-1]' /etc/nginx/sites-available/myapp | head -1)
-          if [ -z \"\$CURRENT_PORT\" ]; then CURRENT_PORT=8080; fi
-
-          if [ \"\$CURRENT_PORT\" = \"8080\" ]; then
-            NEW_PORT=8081
+      # 2️⃣ EC2 깨우기 및 대기 (핵심 추가!!)
+      - name: Start EC2 Instance
+        run: |
+          echo "EC2 인스턴스 상태 확인 중..."
+          STATE=$(aws ec2 describe-instances --instance-ids ${{ secrets.EC2_INSTANCE_ID }} --query "Reservations[0].Instances[0].State.Name" --output text)
+          if [ "$STATE" != "running" ]; then
+            echo "인스턴스가 꺼져있습니다. 시작합니다..."
+            aws ec2 start-instances --instance-ids ${{ secrets.EC2_INSTANCE_ID }}
+            # 1차 대기 : AWS 콘솔상 Running이 뜰 때까지
+            aws ec2 wait instance-running --instance-ids ${{ secrets.EC2_INSTANCE_ID }}
+            echo "AWS Instance Running 상태 도달. 이제 SSH 포트 오픈을 대기합니다..."
           else
-            NEW_PORT=8080
+            echo "인스턴스가 이미 실행 중입니다."
           fi
-          echo \"배포: \$CURRENT_PORT -> \$NEW_PORT\"
-
-          # 2. 새 포트 프로세스 정리
-          NEW_PID=\$(lsof -t -i:\$NEW_PORT)
-          if [ ! -z \"\$NEW_PID\" ]; then kill -9 \$NEW_PID; fi
-
-          # 3. 새 JAR 실행 (Blue/Green 용) - 심볼릭 링크(shopping-current.jar) 바라보게 함
-          source ~/.bashrc
-          nohup java -jar -Dspring.profiles.active=prod /home/ubuntu/shopping-current.jar --server.port=\$NEW_PORT > /home/ubuntu/shopping-app.log 2>&1 &
-          
-          # 4. 헬스 체크 (새로운 애플리케이션 시작 완전 대기, 최대 120초)
-          echo \"새로운 \$NEW_PORT 포트 서버 시작 대기 중...\"
-          for i in \$(seq 1 60); do
-            # 간단히 포트에 HTTP 접속이 가능한지 응답 코드로 확인
-            HTTP_CODE=\$(curl -s -o /dev/null -w \"%{http_code}\" http://localhost:\$NEW_PORT/)
-            if [ \"\$HTTP_CODE\" != \"000\" ]; then
-              echo \"✅ \$NEW_PORT 포트 서버가 켜졌습니다! (응답 코드: \$HTTP_CODE)\"
-              break
-            fi
-            if [ \$i -eq 60 ]; then
-              echo \"❌ 서버 시작 시간이 초과되었습니다 (120초). 배포 실패!\"
-              exit 1
-            fi
-            echo \"서버가 아직 켜지지 않았습니다. 2초 대기... (\$i/60)\"
-            sleep 2
+          # 무조건 22번 포트가 열릴 때까지 5초 간격으로 찔러보기
+          #nc(netcat) 명령어로 호스트의 22번 포트 스캔
+          while ! nc -z -v -w 5 ${{ secrets.EC2_HOST }} 22; do
+            echo "SSH 포트가 아직 닫혀있습니다. 5초 뒤 재시도..."
+            sleep 5
           done
+          echo "SSH 포트 연결 확인 완료! 다음 단계로 진행합니다."
 
-          # 5. Nginx 포트 변경
-          # (myapp.template 파일이 /etc/nginx/sites-available/ 에 있어야 함)
-          sudo cp /etc/nginx/sites-available/myapp.template /etc/nginx/sites-available/myapp
-          sudo sed -i \"s/PORT_NUMBER/\$NEW_PORT/g\" /etc/nginx/sites-available/myapp
-          sudo nginx -t && sudo systemctl reload nginx
+      # 3️⃣ 코드 체크아웃
+      - name: Checkout Code
+        uses: actions/checkout@v3
 
-          # 6. 이전 포트 정리
-          OLD_PID=\$(lsof -t -i:\$CURRENT_PORT)
-          if [ ! -z \"\$OLD_PID\" ]; then kill -9 \$OLD_PID; fi
+      # 4️⃣ Docker 이미지 빌드 및 푸시
+      - name: Login to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-          # 7. 이전 배포 파일 정리 (최근 5개 버전만 남기고 과거 백업본은 삭제)
-          ls -dt /home/ubuntu/shopping-20*.jar | tail -n +6 | xargs -r rm --
+      - name: Build and Push Docker Image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: true
+          tags: ${{ secrets.DOCKERHUB_USERNAME }}/shopping-app:latest
+
+      # 5️⃣ SSH 키 설정
+      - name: Set up SSH Key
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.EC2_KEY }}" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+          ssh-keyscan -H ${{ secrets.EC2_HOST }} >> ~/.ssh/known_hosts
+
+      # 6️⃣ 배포 환경 준비 (Docker Compose 파일 등 전송)
+      - name: Copy Docker Compose to EC2
+        run: |
+          scp -i ~/.ssh/id_rsa docker-compose.prod.yml ubuntu@${{ secrets.EC2_HOST }}:/home/ubuntu/docker-compose.prod.yml
+
+      # 7️⃣ Blue-Green Docker 무중단 배포
+      - name: Deploy with Docker Blue-Green
+        run: |
+          ssh -i ~/.ssh/id_rsa ubuntu@${{ secrets.EC2_HOST }} "
+            # 0. DB 컨테이너가 꺼져있다면 실행 (자동화)
+            if [ \$(sudo docker ps -q -f name=shopping-db | wc -l) -eq 0 ]; then
+              echo \"DB 컨테이너가 꺼져있어 시작합니다...\"
+              sudo docker compose -f /home/ubuntu/docker-compose.prod.yml up -d db
+              sleep 10
+            fi
+
+            # 1. 현재 실행 중인 포트 확인 (Nginx 설정 기준)
+            CURRENT_PORT=\$(grep -o '808[0-1]' /etc/nginx/sites-available/myapp | head -1)
+            if [ -z \"\$CURRENT_PORT\" ]; then CURRENT_PORT=8081; fi # 기본값 설정
           
-          echo \"배포 완료: 현재 서비스 포트 \$NEW_PORT, 실행 파일: \$NEW_JAR\"
-        "
+            if [ \"\$CURRENT_PORT\" = \"8080\" ]; then
+              NEW_PORT=8081
+              NEW_CONTAINER=\"shopping-app-green\"
+              OLD_CONTAINER=\"shopping-app-blue\"
+            else
+              NEW_PORT=8080
+              NEW_CONTAINER=\"shopping-app-blue\"
+              OLD_CONTAINER=\"shopping-app-green\"
+            fi
+            echo \"배포 시작: \$CURRENT_PORT -> \$NEW_PORT\"
+          
+            # 2. 새 이미지 Pull
+            sudo docker pull ${{ secrets.DOCKERHUB_USERNAME }}/shopping-app:latest
+          
+            # 3. 새 컨테이너 실행
+            # DB 컨테이너가 떠 있는지 확인 후 실행 (docker-compose 활용 가능)
+            # 여기서는 개별 docker run 명령어를 사용하거나 최적화된 compose 사용
+          
+            # 기존 컨테이너가 있다면 삭제 (강제 종료 후 삭제)
+            sudo docker rm -f \$NEW_CONTAINER || true
+          
+            # 새 컨테이너 실행 (환경 변수는 .env 파일이나 --env-file 사용)
+            sudo docker run -d \
+              --name \$NEW_CONTAINER \
+              -p \$NEW_PORT:8080 \
+              --network shopping_default \
+              --env-file /home/ubuntu/shopping-app/.env \
+              -e SPRING_PROFILES_ACTIVE=prod \
+              -v /home/ubuntu/shopping-app/UploadFolder:/app/UploadFolder \
+              ${{ secrets.DOCKERHUB_USERNAME }}/shopping-app:latest
+          
+            # 4. 헬스 체크
+            echo \"새 컨테이너(\$NEW_PORT) 헬스 체크 중...\"
+            for i in \$(seq 1 30); do
+              HTTP_CODE=\$(curl -s -o /dev/null -w \"%{http_code}\" http://localhost:\$NEW_PORT/ || echo \"000\")
+              if [ \"\$HTTP_CODE\" != \"000\" ] && [ \"\$HTTP_CODE\" != \"404\" ]; then
+                echo \"✅ 새 컨테이너가 준비되었습니다! (HTTP: \$HTTP_CODE)\"
+                break
+              fi
+              if [ \$i -eq 30 ]; then
+                echo \"❌ 헬스 체크 실패. 배포를 중단합니다.\"
+                sudo docker stop \$NEW_CONTAINER || true
+                exit 1
+              fi
+              echo \"대기 중... (\$i/30)\"
+              sleep 3
+            done
+          
+            # 5. Nginx 설정 변경 및 Reload
+            sudo cp /etc/nginx/sites-available/myapp.template /etc/nginx/sites-available/myapp
+            sudo sed -i \"s/PORT_NUMBER/\$NEW_PORT/g\" /etc/nginx/sites-available/myapp
+            sudo nginx -t && sudo systemctl reload nginx
+          
+            # 6. 이전 컨테이너 정리
+            echo \"이전 컨테이너(\$OLD_CONTAINER) 종료...\"
+            sudo docker stop \$OLD_CONTAINER || true
+            sudo docker rm \$OLD_CONTAINER || true
+          
+            # 7. 미사용 이미지 정리
+            sudo docker image prune -f
+          
+            echo \"배포 완료: 현재 포트 \$NEW_PORT\"
+          "
