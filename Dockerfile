@@ -9,12 +9,8 @@ FROM eclipse-temurin:21-jre
 WORKDIR /app
 COPY --from=build /app/build/libs/*.jar app.jar
 
-# 런타임 설정은 Docker Compose/.env 등 외부에서 주입
-ENV SPRING_PROFILES_ACTIVE=dev
-
 # 업로드 폴더 기본 경로
 RUN mkdir -p /app/UploadFolder
-ENV FILE_DIR=/app/UploadFolder/
 
 # 포트 개방
 EXPOSE 8080

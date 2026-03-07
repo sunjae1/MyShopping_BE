@@ -1,40 +1,12 @@
 services:
-  db:
-    image: mysql:8.0
-    container_name: shopping-db
-    restart: unless-stopped
-    environment:
-      MYSQL_DATABASE: ${MYSQL_DATABASE}
-      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
-      MYSQL_USER: ${MYSQL_USER}
-      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
-    ports:
-      - "3307:3306"
-    volumes:
-      - db-data:/var/lib/mysql
-    healthcheck:
-      test: [ "CMD", "mysqladmin" ,"ping", "-h", "localhost", "-u", "root", "-p$MYSQL_ROOT_PASSWORD" ]
-      interval: 5s
-      timeout: 5s
-      retries: 10
-      start_period: 30s
-
   app:
     build: .
     container_name: shopping-app
-    depends_on:
-      db:
-        condition: service_healthy
     ports:
       - "8080:8080"
+    env_file:
+      - ./.env
     environment:
       SPRING_PROFILES_ACTIVE: dev
-      DB_URL: ${DB_URL}
-      DB_USERNAME: ${DB_USERNAME}
-      DB_PASSWORD: ${DB_PASSWORD}
-      FILE_DIR: ${FILE_DIR:-/app/UploadFolder/}
     volumes:
       - ./UploadFolder:/app/UploadFolder
-
-volumes:
-  db-data:

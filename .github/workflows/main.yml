@@ -16,7 +16,7 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ap-northeast-2 # 본인 리전
 
-      # 2️⃣ EC2 깨우기 및 대기 (핵심 추가!!)
+      # 2️⃣ EC2 깨우기 및 대기
       - name: Start EC2 Instance
         run: |
           echo "EC2 인스턴스 상태 확인 중..."
@@ -24,14 +24,11 @@ jobs:
           if [ "$STATE" != "running" ]; then
             echo "인스턴스가 꺼져있습니다. 시작합니다..."
             aws ec2 start-instances --instance-ids ${{ secrets.EC2_INSTANCE_ID }}
-            # 1차 대기 : AWS 콘솔상 Running이 뜰 때까지
             aws ec2 wait instance-running --instance-ids ${{ secrets.EC2_INSTANCE_ID }}
             echo "AWS Instance Running 상태 도달. 이제 SSH 포트 오픈을 대기합니다..."
           else
             echo "인스턴스가 이미 실행 중입니다."
           fi
-          # 무조건 22번 포트가 열릴 때까지 5초 간격으로 찔러보기
-          #nc(netcat) 명령어로 호스트의 22번 포트 스캔
           while ! nc -z -v -w 5 ${{ secrets.EC2_HOST }} 22; do
             echo "SSH 포트가 아직 닫혀있습니다. 5초 뒤 재시도..."
             sleep 5
@@ -64,26 +61,27 @@ jobs:
           chmod 600 ~/.ssh/id_rsa
           ssh-keyscan -H ${{ secrets.EC2_HOST }} >> ~/.ssh/known_hosts
 
-      # 6️⃣ 배포 환경 준비 (Docker Compose 파일 등 전송)
+      # 6️⃣ 배포 환경 준비
+      - name: Prepare deploy directory on EC2
+        run: |
+          ssh -i ~/.ssh/id_rsa ubuntu@${{ secrets.EC2_HOST }} "mkdir -p /home/ubuntu/shopping-app/UploadFolder"
+
       - name: Copy Docker Compose to EC2
         run: |
-          scp -i ~/.ssh/id_rsa docker-compose.prod.yml ubuntu@${{ secrets.EC2_HOST }}:/home/ubuntu/docker-compose.prod.yml
+          scp -i ~/.ssh/id_rsa docker-compose.prod.yml ubuntu@${{ secrets.EC2_HOST }}:/home/ubuntu/shopping-app/docker-compose.prod.yml
 
       # 7️⃣ Blue-Green Docker 무중단 배포
       - name: Deploy with Docker Blue-Green
         run: |
           ssh -i ~/.ssh/id_rsa ubuntu@${{ secrets.EC2_HOST }} "
-            # 0. DB 컨테이너가 꺼져있다면 실행 (자동화)
-            if [ \$(sudo docker ps -q -f name=shopping-db | wc -l) -eq 0 ]; then
-              echo \"DB 컨테이너가 꺼져있어 시작합니다...\"
-              sudo docker compose -f /home/ubuntu/docker-compose.prod.yml up -d db
-              sleep 10
+            if [ ! -f /home/ubuntu/shopping-app/.env ]; then
+              echo '.env 파일이 /home/ubuntu/shopping-app/.env 에 없습니다.'
+              exit 1
             fi
 
-            # 1. 현재 실행 중인 포트 확인 (Nginx 설정 기준)
             CURRENT_PORT=\$(grep -o '808[0-1]' /etc/nginx/sites-available/myapp | head -1)
-            if [ -z \"\$CURRENT_PORT\" ]; then CURRENT_PORT=8081; fi # 기본값 설정
-          
+            if [ -z \"\$CURRENT_PORT\" ]; then CURRENT_PORT=8081; fi
+
             if [ \"\$CURRENT_PORT\" = \"8080\" ]; then
               NEW_PORT=8081
               NEW_CONTAINER=\"shopping-app-green\"
@@ -94,45 +92,21 @@ jobs:
               OLD_CONTAINER=\"shopping-app-green\"
             fi
             echo \"배포 시작: \$CURRENT_PORT -> \$NEW_PORT\"
-          
-            # 2. 새 이미지 Pull
-            sudo docker pull ${{ secrets.DOCKERHUB_USERNAME }}/shopping-app:latest
-          
-            # 새 컨테이너 실행
-            # .env 파일에서 변수 읽어오기 (SPRING_DATASOURCE_URL 등으로 매핑을 위해)
-            # -e 옵션 뒤에 변수명을 쓰면 현재 쉘의 환경 변수 값이 컨테이너로 전달됩니다.
-            export \$(sudo grep -v '^#' /home/ubuntu/shopping-app/.env | xargs)
 
-            # 기존 컨테이너가 있다면 삭제 (강제 종료 후 삭제)
+            sudo docker pull ${{ secrets.DOCKERHUB_USERNAME }}/shopping-app:latest
             sudo docker rm -f \$NEW_CONTAINER || true
-          
-            # 8080 포트가 이미 다른 컨테이너(예: shopping-app)에 의해 점유되어 있다면 강제 종료
-            SHIPPING_APP_ID=\$(sudo docker ps -q -f \"publish=8080\")
-            if [ ! -z \"\$SHIPPING_APP_ID\" ]; then
-              echo \"8080 포트를 점유 중인 기존 컨테이너를 종료합니다...\"
-              sudo docker stop \$SHIPPING_APP_ID && sudo docker rm \$SHIPPING_APP_ID
-            fi
-          
-            # 새 컨테이너 실행
-            # --link shopping-db:db 를 추가하여 소스코드의 'db' 호스트 이름을 인식하게 함
+
             sudo docker run -d \
               --name \$NEW_CONTAINER \
               -p \$NEW_PORT:8080 \
-              --network shopping_default \
-              --link shopping-db:db \
               --env-file /home/ubuntu/shopping-app/.env \
               -e SPRING_PROFILES_ACTIVE=prod \
-              -e SPRING_DATASOURCE_URL=\"\$DB_URL\" \
-              -e SPRING_DATASOURCE_USERNAME=\"\$DB_USERNAME\" \
-              -e SPRING_DATASOURCE_PASSWORD=\"\$DB_PASSWORD\" \
               -v /home/ubuntu/shopping-app/UploadFolder:/app/UploadFolder \
               ${{ secrets.DOCKERHUB_USERNAME }}/shopping-app:latest
-          
-            # 4. 헬스 체크
+
             echo \"새 컨테이너(\$NEW_PORT) 헬스 체크 중...\"
             for i in \$(seq 1 30); do
               HTTP_CODE=\$(curl -s -o /dev/null -w \"%{http_code}\" http://localhost:\$NEW_PORT/ || echo \"000\")
-              # 마지막 3자리만 추출 (000000 등 방지)
               HTTP_CODE=\${HTTP_CODE: -3}
 
               if [ \"\$HTTP_CODE\" = \"200\" ] || [ \"\$HTTP_CODE\" = \"302\" ]; then
@@ -148,19 +122,15 @@ jobs:
               echo \"대기 중... (\$i/30) 응답: \$HTTP_CODE\"
               sleep 5
             done
-          
-            # 5. Nginx 설정 변경 및 Reload
+
             sudo cp /etc/nginx/sites-available/myapp.template /etc/nginx/sites-available/myapp
             sudo sed -i \"s/PORT_NUMBER/\$NEW_PORT/g\" /etc/nginx/sites-available/myapp
             sudo nginx -t && sudo systemctl reload nginx
-          
-            # 6. 이전 컨테이너 정리
+
             echo \"이전 컨테이너(\$OLD_CONTAINER) 종료...\"
             sudo docker stop \$OLD_CONTAINER || true
             sudo docker rm \$OLD_CONTAINER || true
-          
-            # 7. 미사용 이미지 정리
+
             sudo docker image prune -f
-          
             echo \"배포 완료: 현재 포트 \$NEW_PORT\"
           "
