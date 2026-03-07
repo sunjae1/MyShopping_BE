@@ -15,6 +15,8 @@ services:
       timeout: 5s
       retries: 10
       start_period: 30s
+    networks:
+      - shopping_network
 
   app:
     image: ${APP_IMAGE:-sunjae1/shopping-app:latest}
@@ -32,6 +34,14 @@ services:
       SPRING_PROFILES_ACTIVE: prod
     volumes:
       - ./UploadFolder:/app/UploadFolder
+
+    networks:
+      - shopping_network
+
+networks:
+  shopping_network:
+    external: true
+    name: shopping_default
 
 volumes:
   db-data:

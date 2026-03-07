@@ -99,20 +99,25 @@ jobs:
             sudo docker pull ${{ secrets.DOCKERHUB_USERNAME }}/shopping-app:latest
           
             # 3. 새 컨테이너 실행
-            # DB 컨테이너가 떠 있는지 확인 후 실행 (docker-compose 활용 가능)
-            # 여기서는 개별 docker run 명령어를 사용하거나 최적화된 compose 사용
-          
             # 기존 컨테이너가 있다면 삭제 (강제 종료 후 삭제)
             sudo docker rm -f \$NEW_CONTAINER || true
           
-            # 새 컨테이너 실행 (환경 변수는 .env 파일이나 --env-file 사용)
+            # 8080 포트가 이미 다른 컨테이너(예: shopping-app)에 의해 점유되어 있다면 강제 종료
+            SHIPPING_APP_ID=\$(sudo docker ps -q -f \"publish=8080\")
+            if [ ! -z \"\$SHIPPING_APP_ID\" ]; then
+              echo \"8080 포트를 점유 중인 기존 컨테이너를 종료합니다...\"
+              sudo docker stop \$SHIPPING_APP_ID && sudo docker rm \$SHIPPING_APP_ID
+            fi
+          
+            # 새 컨테이너 실행
+            # --link shopping-db:db 를 추가하여 소스코드의 'db' 호스트 이름을 인식하게 함
             sudo docker run -d \
               --name \$NEW_CONTAINER \
               -p \$NEW_PORT:8080 \
               --network shopping_default \
+              --link shopping-db:db \
               --env-file /home/ubuntu/shopping-app/.env \
               -e SPRING_PROFILES_ACTIVE=prod \
-              -e SPRING_DATASOURCE_URL=jdbc:mysql://shopping-db:3306/myshopping?serverTimezone=Asia/Seoul \
               -v /home/ubuntu/shopping-app/UploadFolder:/app/UploadFolder \
               ${{ secrets.DOCKERHUB_USERNAME }}/shopping-app:latest
           
@@ -120,17 +125,21 @@ jobs:
             echo \"새 컨테이너(\$NEW_PORT) 헬스 체크 중...\"
             for i in \$(seq 1 30); do
               HTTP_CODE=\$(curl -s -o /dev/null -w \"%{http_code}\" http://localhost:\$NEW_PORT/ || echo \"000\")
-              if [ \"\$HTTP_CODE\" != \"000\" ] && [ \"\$HTTP_CODE\" != \"404\" ]; then
+              # 마지막 3자리만 추출 (000000 등 방지)
+              HTTP_CODE=\${HTTP_CODE: -3}
+
+              if [ \"\$HTTP_CODE\" = \"200\" ] || [ \"\$HTTP_CODE\" = \"302\" ]; then
                 echo \"✅ 새 컨테이너가 준비되었습니다! (HTTP: \$HTTP_CODE)\"
                 break
               fi
               if [ \$i -eq 30 ]; then
-                echo \"❌ 헬스 체크 실패. 배포를 중단합니다.\"
+                echo \"❌ 헬스 체크 실패 (\$HTTP_CODE). 배포를 중단하고 롤백합니다.\"
                 sudo docker stop \$NEW_CONTAINER || true
+                sudo docker rm \$NEW_CONTAINER || true
                 exit 1
               fi
-              echo \"대기 중... (\$i/30)\"
-              sleep 3
+              echo \"대기 중... (\$i/30) 응답: \$HTTP_CODE\"
+              sleep 5
             done
           
             # 5. Nginx 설정 변경 및 Reload
