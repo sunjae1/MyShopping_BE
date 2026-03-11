@@ -98,7 +98,6 @@ jobs:
               -p \$NEW_PORT:8080 \
               --env-file /home/ubuntu/shopping-app/.env \
               -e SPRING_PROFILES_ACTIVE=prod \
-              -v /home/ubuntu/shopping-app/UploadFolder:/app/UploadFolder \
               ${{ secrets.DOCKERHUB_USERNAME }}/shopping-app:latest
 
             echo \"새 컨테이너(\$NEW_PORT) 헬스 체크 중...\"
