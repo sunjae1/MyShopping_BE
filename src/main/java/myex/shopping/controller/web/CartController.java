@@ -12,9 +12,9 @@ import myex.shopping.dto.userdto.PrincipalDetails;
 import myex.shopping.dto.userdto.UserDto;
 import myex.shopping.exception.ResourceNotFoundException;
 import myex.shopping.form.CartForm;
-import myex.shopping.repository.CartRepository;
 import myex.shopping.repository.ItemRepository;
 import myex.shopping.service.CartService;
+import myex.shopping.service.ImageService;
 import myex.shopping.service.ItemService;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.stereotype.Controller;
@@ -30,13 +30,14 @@ public class CartController {
     private final ItemRepository itemRepository;
     private final ItemService itemService;
     private final CartService cartService;
+    private final ImageService imageService;
 
     // 한 상품에 대한 주문 페이지를 보여주고, 장바구니 담기 클릭시 장바구니에 저장.
     @GetMapping("/{itemId}/cart")
     public String viewCart(@PathVariable Long itemId,
-            @ModelAttribute CartForm cartForm,
-            @AuthenticationPrincipal PrincipalDetails principalDetails,
-            Model model) {
+                           @ModelAttribute CartForm cartForm,
+                           @AuthenticationPrincipal PrincipalDetails principalDetails,
+                           Model model) {
         if (principalDetails != null) {
             User loginUser = principalDetails.getUser();
             UserDto userDto = new UserDto(loginUser);
@@ -50,9 +51,9 @@ public class CartController {
     // 한 상품에 대한 주문 페이지에서 정보가 넘어오면 장바구니에 저장.
     @PostMapping("/{itemId}/cart")
     public String addToCart(@Valid @ModelAttribute CartForm cartForm,
-            BindingResult bindingResult,
-            Model model,
-            @AuthenticationPrincipal PrincipalDetails principalDetails) {
+                            BindingResult bindingResult,
+                            Model model,
+                            @AuthenticationPrincipal PrincipalDetails principalDetails) {
         log.info("cart 상품 추가 컨트롤러 진입");
         log.info("cartForm 정보 : {}", cartForm);
 
@@ -65,14 +66,14 @@ public class CartController {
                 .orElseThrow(() -> new ResourceNotFoundException("item not found"));
         if (bindingResult.hasErrors()) {
             log.info("검증 실패 : {}", bindingResult);
-            model.addAttribute("item", item);
+            model.addAttribute("item", imageService.resolveImageUrl(new ItemDto(item)));
             return "cart/cartForm";
         }
         // 재고 수량 초과로 장바구니 담을 시
         if (item.getQuantity() < cartForm.getQuantity()) {
             log.info("장바구니 담기 : 재고 수량 초과 오류");
             bindingResult.rejectValue("quantity", "Exceed", "상품 재고 수량을 초과할 수 없습니다.");
-            model.addAttribute("item", item);
+            model.addAttribute("item", imageService.resolveImageUrl(new ItemDto(item)));
             return "cart/cartForm";
         }
         Cart cart = cartService.findOrCreateCartForUser(loginUser);
@@ -83,7 +84,7 @@ public class CartController {
         }
         if (bindingResult.hasErrors()) {
             log.info("검증 실패 : {}", bindingResult);
-            model.addAttribute("item", item);
+            model.addAttribute("item", imageService.resolveImageUrl(new ItemDto(item)));
             return "cart/cartForm";
         }
         if (cart.getId() != null) {
@@ -97,7 +98,7 @@ public class CartController {
     // 장바구니 전체 보여주는 뷰.
     @GetMapping("/cartAll")
     public String cartAll(Model model,
-            @AuthenticationPrincipal PrincipalDetails principalDetails) {
+                          @AuthenticationPrincipal PrincipalDetails principalDetails) {
         User loginUser = principalDetails != null ? principalDetails.getUser() : null;
 
         CartDto cart = cartService.findByUserByDto(loginUser);
@@ -108,7 +109,7 @@ public class CartController {
     // 장바구니 아이템 삭제
     @PostMapping("/cart/remove")
     public String cartItemRemove(@RequestParam Long itemId,
-            @AuthenticationPrincipal PrincipalDetails principalDetails) {
+                                 @AuthenticationPrincipal PrincipalDetails principalDetails) {
         User loginUser = principalDetails != null ? principalDetails.getUser() : null;
         cartService.deleteItem(itemId, loginUser);
         return "redirect:/items/cartAll";

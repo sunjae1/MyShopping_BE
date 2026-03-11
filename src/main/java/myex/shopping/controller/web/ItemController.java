@@ -14,6 +14,7 @@ import myex.shopping.exception.ResourceNotFoundException;
 import myex.shopping.form.ItemAddForm;
 import myex.shopping.form.ItemEditForm;
 import myex.shopping.repository.ItemRepository;
+import myex.shopping.service.ImageService;
 import myex.shopping.service.ItemService;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.stereotype.Controller;
@@ -33,6 +34,7 @@ public class ItemController {
 
     private final ItemRepository itemRepository; // 생성자 주입.
     private final ItemService itemService;
+    private final ImageService imageService;
 
     // 전체 아이템 조회 (+검색 추가)
     @GetMapping
@@ -63,7 +65,9 @@ public class ItemController {
         Item item = itemRepository.findById(itemId)
                 .orElseThrow(() -> new ResourceNotFoundException("item not found"));
         // DTO로 변환.
-        model.addAttribute("item", new ItemDtoDetail(item));
+        ItemDtoDetail dto = new ItemDtoDetail(item);
+        imageService.resolveImageUrl(dto);
+        model.addAttribute("item", dto);
         return "items/item";
     }
 
@@ -122,7 +126,7 @@ public class ItemController {
             model.addAttribute("user", userDto);
         }
 
-        model.addAttribute("item", new ItemEditDto(item));
+        model.addAttribute("item", imageService.resolveImageUrl(new ItemEditDto(item)));
         return "items/editForm";
     }
 

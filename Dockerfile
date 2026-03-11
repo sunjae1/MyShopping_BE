@@ -9,8 +9,6 @@ FROM eclipse-temurin:21-jre
 WORKDIR /app
 COPY --from=build /app/build/libs/*-SNAPSHOT.jar app.jar
 
-# 업로드 폴더 기본 경로
-RUN mkdir -p /app/UploadFolder
 
 # 포트 개방
 EXPOSE 8080

@@ -17,6 +17,7 @@ import myex.shopping.dto.userdto.UserEditDto;
 import myex.shopping.dto.userdto.UserResponse;
 import myex.shopping.form.RegisterForm;
 import myex.shopping.service.CartService;
+import myex.shopping.service.ImageService;
 import myex.shopping.service.ItemService;
 import myex.shopping.service.OrderService;
 import myex.shopping.service.PostService;
@@ -50,6 +51,7 @@ public class ApiUserController {
         private final OrderService orderService;
         private final PostService postService;
         private final CartService cartService;
+        private final ImageService imageService;
 
         // 로그인
         // Spring Security 대신 처리.
@@ -104,7 +106,9 @@ public class ApiUserController {
                 List<OrderDto> orders = orderService.findOrderDtosByUser(loginUser);
                 List<PostDto> posts = postService.findPostDtosByUser(loginUser);
                 Cart cart = cartService.findOrCreateCartForUser(loginUser);
-                return ResponseEntity.ok(new MyPageDto(loginUser, orders, posts, cart));
+                MyPageDto dto = new MyPageDto(loginUser, orders, posts, cart);
+                imageService.resolveImageUrls(dto.getCartItems());
+                return ResponseEntity.ok(dto);
         }
 
         @Operation(summary = "회원가입", description = "회원가입 등록", responses = {

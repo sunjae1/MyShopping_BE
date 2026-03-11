@@ -3,7 +3,6 @@ package myex.shopping.controller.api;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
-import myex.shopping.dto.userdto.PrincipalDetails;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Positive;
 import lombok.RequiredArgsConstructor;
@@ -12,10 +11,12 @@ import myex.shopping.domain.Cart;
 import myex.shopping.domain.Item;
 import myex.shopping.domain.User;
 import myex.shopping.dto.cartdto.CartDto;
+import myex.shopping.dto.userdto.PrincipalDetails;
 import myex.shopping.form.CartForm;
 import myex.shopping.repository.CartRepository;
 import myex.shopping.repository.ItemRepository;
 import myex.shopping.service.CartService;
+import myex.shopping.service.ImageService;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -35,6 +36,7 @@ public class ApiCartController {
     private final ItemRepository itemRepository;
     private final CartRepository cartRepository;
     private final CartService cartService;
+    private final ImageService imageService;
 
     @Operation(summary = "선택 상품 장바구니 저장", description = "한 상품에 대해서 선택 시 장바구니에 저장", responses = {
             @ApiResponse(responseCode = "200", description = "장바구니 추가 성공"),
@@ -49,8 +51,8 @@ public class ApiCartController {
     // itemId나 CartForm id 중 하나만 쓰기. --> itemId로.
     @PostMapping("/items/{itemId}")
     public ResponseEntity<CartDto> addToCart(@PathVariable @Positive(message = "양수만 입력가능합니다.") Long itemId,
-            @Valid @RequestBody CartForm cartForm,
-            @AuthenticationPrincipal PrincipalDetails principalDetails) {
+                                             @Valid @RequestBody CartForm cartForm,
+                                             @AuthenticationPrincipal PrincipalDetails principalDetails) {
         if (principalDetails == null) {
             log.info("로그인 실패");
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();// 401
@@ -81,6 +83,7 @@ public class ApiCartController {
             cartService.save(cart, loginUser);
         }
         CartDto cartDto = new CartDto(cart);
+        imageService.resolveCartItemImageUrls(cartDto.getCartItems());
         return ResponseEntity.ok(cartDto); // 200
     }
 
@@ -91,10 +94,18 @@ public class ApiCartController {
     // 장바구니 전체 보여주는 뷰. cartItem List 전달.
     @GetMapping
     public ResponseEntity<CartDto> cartAll(@AuthenticationPrincipal PrincipalDetails principalDetails) {
-        User loginUser = principalDetails != null ? principalDetails.getUser() : null;
+        if (principalDetails == null) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
+        }
+
+        User loginUser = principalDetails.getUser();
 
         return cartRepository.findByUser(loginUser)
-                .map(cart -> ResponseEntity.ok(new CartDto(cart)))
+                .map(cart -> {
+                    CartDto dto = new CartDto(cart);
+                    imageService.resolveCartItemImageUrls(dto.getCartItems());
+                    return ResponseEntity.ok(dto);
+                })
                 .orElse(ResponseEntity.ok(new CartDto(Collections.emptyList()))); // null 해야 빈 장바구니 출력 가능.
     }
 
@@ -105,7 +116,7 @@ public class ApiCartController {
     // 장바구니 아이템 삭제
     @DeleteMapping("/items/{itemId}")
     public ResponseEntity<?> cartItemRemove(@PathVariable @Positive Long itemId,
-            @AuthenticationPrincipal PrincipalDetails principalDetails) {
+                                            @AuthenticationPrincipal PrincipalDetails principalDetails) {
         if (principalDetails == null) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
         }
@@ -116,6 +127,8 @@ public class ApiCartController {
         }
         Item findItem = findItemOpt.get();
         Cart cart = cartService.deleteItem(findItem.getId(), loginUser);
-        return ResponseEntity.ok(new CartDto(cart));
+        CartDto dto = new CartDto(cart);
+        imageService.resolveCartItemImageUrls(dto.getCartItems());
+        return ResponseEntity.ok(dto);
     }
 }

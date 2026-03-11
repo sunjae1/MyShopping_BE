@@ -3,7 +3,6 @@ package myex.shopping.service;
 import myex.shopping.domain.Cart;
 import myex.shopping.domain.Item;
 import myex.shopping.domain.User;
-import myex.shopping.exception.ResourceNotFoundException;
 import myex.shopping.repository.CartRepository;
 import myex.shopping.repository.ItemRepository;
 import myex.shopping.repository.UserRepository;
@@ -17,8 +16,6 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
-import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
@@ -32,6 +29,9 @@ class CartServiceTest {
 
     @Mock
     private UserRepository userRepository;
+
+    @Mock
+    private ImageService imageService;
 
     @InjectMocks
     private CartService cartService;

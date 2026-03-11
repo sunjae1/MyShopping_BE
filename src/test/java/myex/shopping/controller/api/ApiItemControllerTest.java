@@ -1,6 +1,9 @@
 package myex.shopping.controller.api;
 
 import myex.shopping.domain.Item;
+import myex.shopping.dto.itemdto.ItemDto;
+import myex.shopping.dto.itemdto.ItemDtoDetail;
+import myex.shopping.dto.itemdto.ItemEditDto;
 import myex.shopping.repository.ItemRepository;
 import myex.shopping.service.ImageService;
 import org.junit.jupiter.api.BeforeEach;
@@ -18,6 +21,7 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.io.IOException;
+import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.hasSize;
@@ -48,11 +52,18 @@ class ApiItemControllerTest {
 
     @BeforeEach
     void setUp() throws IOException {
-        // ImageService.storeFile이 항상 가짜 경로를 반환하도록 설정
-        when(imageService.storeFile(any())).thenReturn("/fake/path/image.jpg");
+        // ImageService.storeFile이 항상 가짜 S3 key를 반환하도록 설정
+        when(imageService.storeFile(any())).thenReturn("images/fake-image.jpg");
 
-        testItem1 = new Item("테스트 상품 1", 10000, 10, "/image/test1.jpg");
-        testItem2 = new Item("테스트 상품 2", 25000, 5, "/image/test2.jpg");
+        // resolveImageUrls/resolveImageUrl이 입력을 그대로 반환하도록 설정
+        when(imageService.resolveImageUrls(any(List.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(imageService.resolveImageUrl(any(ItemDto.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(imageService.resolveImageUrl(any(ItemDtoDetail.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(imageService.resolveImageUrl(any(ItemEditDto.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(imageService.generatePresignedUrl(any())).thenReturn("https://fake-presigned-url.com/image.jpg");
+
+        testItem1 = new Item("테스트 상품 1", 10000, 10, "images/test1.jpg");
+        testItem2 = new Item("테스트 상품 2", 25000, 5, "images/test2.jpg");
         itemRepository.save(testItem1);
         itemRepository.save(testItem2);
     }

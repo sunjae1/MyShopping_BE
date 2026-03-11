@@ -17,8 +17,6 @@ spring:
   flyway:
     enabled: true
 
-file:
-  dir: ${FILE_DIR:./UploadFolder/}
 
 logging.level:
   myex.shopping: INFO

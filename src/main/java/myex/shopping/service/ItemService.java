@@ -9,19 +9,12 @@ import myex.shopping.exception.ResourceNotFoundException;
 import myex.shopping.form.ItemAddForm;
 import myex.shopping.form.ItemEditForm;
 import myex.shopping.repository.ItemRepository;
-import myex.shopping.repository.jpa.JpaItemRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
-import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.util.List;
-import java.util.Optional;
-import java.util.UUID;
 import java.util.stream.Collectors;
 
 @Slf4j
@@ -48,17 +41,19 @@ public class ItemService {
     // id itemName, price, quantity (url 없음)
     @Transactional(readOnly = true)
     public List<ItemDto> findAllToDto() {
-        return itemRepository.findAll()
+        List<ItemDto> dtos = itemRepository.findAll()
                 .stream()
                 .map(ItemDto::new)
                 .collect(Collectors.toList());
+        return imageService.resolveImageUrls(dtos);
     }
 
     @Transactional(readOnly = true)
     public ItemDto findByIdToDto(Long id) {
-        return itemRepository.findById(id)
+        ItemDto dto = itemRepository.findById(id)
                 .map(ItemDto::new)
                 .orElseThrow(() -> new ResourceNotFoundException("item not found"));
+        return imageService.resolveImageUrl(dto);
     }
 
     @Transactional(readOnly = false)
@@ -84,6 +79,8 @@ public class ItemService {
         item.setPrice(form.getPrice());
         item.setQuantity(form.getQuantity());
         if (imageUrl != null) {
+            // 새 이미지가 업로드되면 기존 S3 이미지 삭제
+            imageService.deleteFile(item.getImageUrl());
             item.setImageUrl(imageUrl);
         }
         itemRepository.save(item);
@@ -93,55 +90,60 @@ public class ItemService {
 
     @Transactional
     public void deleteItem(Long itemId) {
-        itemRepository.findById(itemId)
+        Item item = itemRepository.findById(itemId)
                 .orElseThrow(() -> new ResourceNotFoundException("item not found"));
+        // 아이템 삭제 시 S3 이미지도 삭제
+        imageService.deleteFile(item.getImageUrl());
         itemRepository.deleteItem(itemId);
     }
 
     public List<ItemDto> findSearchByNameDto(String keyword) {
-        return itemRepository.searchByName(keyword)
+        List<ItemDto> dtos = itemRepository.searchByName(keyword)
                 .stream()
                 .map(ItemDto::new)
                 .collect(Collectors.toList());
+        return imageService.resolveImageUrls(dtos);
     }
 
     public List<ItemDto> findByCategory(Long categoryId) {
-        return itemRepository.findByCategory(categoryId)
+        List<ItemDto> dtos = itemRepository.findByCategory(categoryId)
                 .stream()
                 .map(ItemDto::new)
                 .collect(Collectors.toList());
+        return imageService.resolveImageUrls(dtos);
     }
 
     // 키워드 검색 && 카테고리 로 아이템 검색
     public List<ItemDto> findItems(String keyword, Long categoryId) {
+        List<ItemDto> dtos;
         // 카테고리 && 검색어 둘 다 있는경우
         if (StringUtils.hasText(keyword) && categoryId != null) {
-            return itemRepository.findByCategoryAndName(categoryId, keyword)
+            dtos = itemRepository.findByCategoryAndName(categoryId, keyword)
                     .stream()
                     .map(ItemDto::new)
                     .collect(Collectors.toList());
         }
         // 검색어만 있는 경우
         else if (StringUtils.hasText(keyword)) {
-            return itemRepository.searchByName(keyword)
+            dtos = itemRepository.searchByName(keyword)
                     .stream()
                     .map(ItemDto::new)
                     .collect(Collectors.toList());
         }
         // 카테고리만 있는 경우
         else if (categoryId != null) {
-            return itemRepository.findByCategory(categoryId)
+            dtos = itemRepository.findByCategory(categoryId)
                     .stream()
                     .map(ItemDto::new)
                     .collect(Collectors.toList());
         }
         // 둘 다 없는 경우.
         else {
-            return itemRepository.findAll()
+            dtos = itemRepository.findAll()
                     .stream()
                     .map(ItemDto::new)
                     .collect(Collectors.toList());
         }
-
+        return imageService.resolveImageUrls(dtos);
     }
 }

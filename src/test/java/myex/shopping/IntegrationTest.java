@@ -78,7 +78,12 @@ public class IntegrationTest {
     @Test
     @DisplayName("사용자 전체 시나리오 통합 테스트: 회원가입 -> 로그인 -> 상품 추가 -> 장바구니 담기 -> 주문 -> 게시글 작성")
     void fullUserJourneyTest() throws Exception {
-        when(imageService.storeFile(any())).thenReturn("/fake/path/image.jpg");
+        when(imageService.storeFile(any())).thenReturn("images/fake-image.jpg");
+        when(imageService.resolveImageUrls(any())).thenAnswer(invocation -> invocation.getArgument(0));
+        when(imageService.resolveImageUrl(any(myex.shopping.dto.itemdto.ItemDto.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(imageService.resolveImageUrl(any(myex.shopping.dto.itemdto.ItemDtoDetail.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(imageService.resolveImageUrl(any(myex.shopping.dto.itemdto.ItemEditDto.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(imageService.generatePresignedUrl(any())).thenReturn("https://fake-presigned-url.com/image.jpg");
 
         // 1. 회원가입 (CSRF 토큰 필요)
         mockMvc.perform(post("/register")

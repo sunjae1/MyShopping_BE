@@ -124,6 +124,10 @@ nav a:hover {
     color: var(--primary-text);
 }
 
+.product-card-link {
+    display: block;
+}
+
 .product-card .product-image {
     overflow: hidden;
     border-radius: 8px;
@@ -165,6 +169,17 @@ nav a:hover {
     width: 100%;
     background-color: var(--light-gray-bg);
     color: var(--primary-text);
+}
+
+.product-card-cta-form {
+    margin-top: 10px;
+}
+
+.product-card .product-card-cta {
+    display: block;
+    position: relative;
+    z-index: 1;
+    margin-top: 0;
 }
 
 .product-card .btn:hover {
@@ -368,7 +383,7 @@ footer {
     margin-top: 40px;
 }
 
-<!-- 장바구니 관련-->
+/* 장바구니 관련 */
         .cart-form-container {
             display: flex;
             gap: 40px;
@@ -418,7 +433,7 @@ footer {
             gap: 10px;
         }
 
-        <!-- 마이페이지 관련 -->
+        /* 마이페이지 관련 */
              .mypage-container {
                     margin-top: 30px;
                 }
@@ -472,7 +487,7 @@ footer {
                 }
 
 
-                <!-- Post 게시판 관련 css -->
+                /* Post 게시판 관련 css */
                 .page-header {
                 display: flex;
                 justify-content: space-between;
@@ -514,7 +529,7 @@ footer {
                  }
 
 
-<!-- posts/new 게시판 등록 관련 -->
+/* posts/new 게시판 등록 관련 */
      .form-container {
             max-width: 800px;
             margin: 40px auto;
@@ -573,7 +588,7 @@ footer {
             font-size: 0.875em;
             margin-top: 5px;
         }
-<!-- posts/view.html : 상세 게시물 보기 -->
+/* posts/view.html : 상세 게시물 보기 */
 .post-view-container {
             max-width: 900px;
             margin: 40px auto;
@@ -673,8 +688,8 @@ footer {
             font-size: 0.875em;
             margin-bottom: 10px;
         }
-<!-- items 관련 -->
-<!-- items.html -->
+/* items 관련 */
+/* items.html */
 .page-header {
             display: flex;
             justify-content: space-between;
@@ -713,7 +728,7 @@ footer {
             display: flex;
             gap: 10px;
         }
-<!--item.html 관련-->
+/* item.html 관련 */
 .product-detail-container {
             display: flex;
             gap: 50px;
@@ -761,7 +776,7 @@ footer {
             flex-wrap: wrap;
             gap: 15px;
         }
-<!-- addForm.html 관련-->
+/* addForm.html 관련 */
 .form-container {
             max-width: 800px;
             margin: 40px auto;
@@ -812,7 +827,7 @@ footer {
             font-size: 0.875em;
             margin-top: 5px;
         }
-<!-- editForm.html 관련 -->
+/* editForm.html 관련 */
 .form-container {
             max-width: 800px;
             margin: 40px auto;

@@ -1,11 +1,17 @@
 package myex.shopping.controller.api;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import jakarta.persistence.EntityManager;
+import myex.shopping.domain.Cart;
+import myex.shopping.domain.Item;
 import myex.shopping.domain.User;
 import myex.shopping.dto.userdto.PrincipalDetails;
 import myex.shopping.dto.userdto.UserEditDto;
 import myex.shopping.form.RegisterForm;
+import myex.shopping.repository.CartRepository;
+import myex.shopping.repository.ItemRepository;
 import myex.shopping.repository.UserRepository;
+import myex.shopping.service.CartService;
 import myex.shopping.service.UserService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -21,6 +27,7 @@ import org.springframework.transaction.annotation.Transactional;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.hasSize;
 import static org.hamcrest.Matchers.is;
+import static org.hamcrest.Matchers.startsWith;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.user;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultHandlers.print;
@@ -42,6 +49,18 @@ class ApiUserControllerTest {
 
     @Autowired
     private UserRepository userRepository;
+
+    @Autowired
+    private ItemRepository itemRepository;
+
+    @Autowired
+    private CartRepository cartRepository;
+
+    @Autowired
+    private CartService cartService;
+
+    @Autowired
+    private EntityManager em;
 
     private User testUser;
     private PrincipalDetails testUserDetails;
@@ -142,5 +161,26 @@ class ApiUserControllerTest {
 
         User deletedUser = userRepository.findById(userId).orElseThrow();
         assertThat(deletedUser.isActive()).isFalse();
+    }
+
+    @Test
+    @DisplayName("마이페이지 API는 장바구니 상품 이미지에 Pre-signed URL을 반환한다")
+    void myPage_shouldReturnPresignedUrlsForCartItems() throws Exception {
+        Item item = new Item("마이페이지 상품", 7000, 5, "images/my-page-item.png");
+        itemRepository.save(item);
+
+        Cart cart = cartService.findOrCreateCartForUser(testUser);
+        cart.addItem(item, 1);
+        cartRepository.save(cart);
+        em.flush();
+        em.clear();
+
+        mockMvc.perform(get("/api/myPage")
+                        .with(user(testUserDetails)))
+                .andDo(print())
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.cartItems", hasSize(1)))
+                .andExpect(jsonPath("$.cartItems[0].itemName", is(item.getItemName())))
+                .andExpect(jsonPath("$.cartItems[0].imageUrl", startsWith("https://")));
     }
 }

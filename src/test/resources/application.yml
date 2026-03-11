@@ -17,6 +17,17 @@ spring:
         use_sql_comments: true
   flyway:
     enabled: false
+
+cloud:
+  aws:
+    credentials:
+      access-key: test-access-key
+      secret-key: test-secret-key
+    region: ap-northeast-2
+    s3:
+      bucket: test-bucket
+      presigned-url-expiration: 60
+
 logging:
   level:
     org.hibernate.SQL: debug

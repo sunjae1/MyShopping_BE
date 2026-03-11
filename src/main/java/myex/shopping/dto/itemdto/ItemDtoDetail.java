@@ -2,6 +2,7 @@ package myex.shopping.dto.itemdto;
 
 import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.Getter;
+import lombok.Setter;
 import myex.shopping.domain.Item;
 import org.springframework.format.annotation.NumberFormat;
 
@@ -17,7 +18,8 @@ public class ItemDtoDetail {
     private int price;
     @Schema(description = "상품재고 수량", example = "30")
     private int quantity;
-    @Schema(description = "상품 이미지 URL", example = "*/img/1.webp")
+    @Schema(description = "상품 이미지 URL (Pre-signed URL)", example = "https://bucket.s3.amazonaws.com/images/1.webp?X-Amz-...")
+    @Setter
     private String imageUrl;
 
     public ItemDtoDetail(Item item) {

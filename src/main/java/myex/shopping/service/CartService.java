@@ -1,11 +1,9 @@
 package myex.shopping.service;
 
 import jakarta.persistence.EntityManager;
-import jakarta.servlet.http.HttpSession;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import myex.shopping.domain.Cart;
-import myex.shopping.domain.CartItem;
 import myex.shopping.domain.Item;
 import myex.shopping.domain.User;
 import myex.shopping.dto.cartdto.CartDto;
@@ -16,8 +14,6 @@ import myex.shopping.repository.UserRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.util.Optional;
-
 @Slf4j
 @Service
 @RequiredArgsConstructor
@@ -26,6 +22,7 @@ public class CartService {
     private final ItemRepository itemRepository;
     private final CartRepository cartRepository;
     private final UserRepository userRepository;
+    private final ImageService imageService;
     private final EntityManager em;
 
     @Transactional(readOnly = false)
@@ -52,9 +49,12 @@ public class CartService {
     @Transactional(readOnly = true)
     public CartDto findByUserByDto(User user) {
         return cartRepository.findByUser(user)
-                .map(CartDto::new)
+                .map(cart -> {
+                    CartDto dto = new CartDto(cart);
+                    imageService.resolveCartItemImageUrls(dto.getCartItems());
+                    return dto;
+                })
                 .orElse(null); // null 해야 프론트에서 가능.
-
     }
 
     @Transactional(readOnly = false)
@@ -90,7 +90,7 @@ public class CartService {
          * sessionCI.setId(managedCI.getId());
          * sessionCI.setItem(managedCI.getItem());
          * sessionCI.setQuantity(managedCI.getQuantity());
-         * 
+         *
          * //양방향 연관관계
          * sessionCI.setCart(cart);
          * cart.getCartItems().add(sessionCI);
