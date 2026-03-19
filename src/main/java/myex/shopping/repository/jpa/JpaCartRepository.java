@@ -30,9 +30,10 @@ public class JpaCartRepository implements CartRepository {
 
     @Override
     public Optional<Cart> findById(Long id) {
-        List<Cart> result = em.createQuery("select c from Cart c " +
+        List<Cart> result = em.createQuery("select distinct c from Cart c " +
                         "left join fetch c.cartItems ci " +
-                        "left join fetch ci.item " +
+                        "left join fetch ci.item i " +
+                        "left join fetch i.category " +
                         "where c.id= :id", Cart.class)
                 .setParameter("id", id)
                 .getResultList();
@@ -41,9 +42,10 @@ public class JpaCartRepository implements CartRepository {
 
     @Override
     public Optional<Cart> findByUser(User user) {
-        return em.createQuery("select c from Cart c " +
+        return em.createQuery("select distinct c from Cart c " +
                         "left join fetch c.cartItems ci " +
-                        "left join fetch ci.item " +
+                        "left join fetch ci.item i " +
+                        "left join fetch i.category " +
                         "where c.user= :user", Cart.class)
                 .setParameter("user", user)
                 .getResultList()
@@ -54,7 +56,8 @@ public class JpaCartRepository implements CartRepository {
     public List<Cart> findAll() {
         return em.createQuery("select distinct c from Cart c " +
                         "join fetch c.cartItems ci " +
-                        "join fetch ci.item i", Cart.class)
+                        "join fetch ci.item i " +
+                        "left join fetch i.category", Cart.class)
                 .getResultList();
     }
 
