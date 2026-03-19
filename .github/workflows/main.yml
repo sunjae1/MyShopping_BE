@@ -4,6 +4,10 @@ on:
     branches:
       - main
 
+concurrency:
+  group: production-deploy
+  cancel-in-progress: false
+
 jobs:
   deploy:
     runs-on: ubuntu-latest
@@ -51,7 +55,9 @@ jobs:
         with:
           context: .
           push: true
-          tags: ${{ secrets.DOCKERHUB_USERNAME }}/shopping-app:latest
+          tags: |
+            ${{ secrets.DOCKERHUB_USERNAME }}/shopping-app:latest
+            ${{ secrets.DOCKERHUB_USERNAME }}/shopping-app:${{ github.sha }}
 
       # 5️⃣ SSH 키 설정
       - name: Set up SSH Key
@@ -64,72 +70,122 @@ jobs:
       # 6️⃣ 배포 환경 준비
       - name: Prepare deploy directory on EC2
         run: |
-          ssh -i ~/.ssh/id_rsa ubuntu@${{ secrets.EC2_HOST }} "mkdir -p /home/ubuntu/shopping-app/UploadFolder"
+          ssh -i ~/.ssh/id_rsa ubuntu@${{ secrets.EC2_HOST }} "mkdir -p /home/ubuntu/shopping-app"
 
-
-      # 7️⃣ Blue-Green Docker 무중단 배포
-      - name: Deploy with Docker Blue-Green
+      - name: Copy production compose file to EC2
         run: |
-          ssh -i ~/.ssh/id_rsa ubuntu@${{ secrets.EC2_HOST }} "
-            if [ ! -f /home/ubuntu/shopping-app/.env ]; then
-              echo '.env 파일이 /home/ubuntu/shopping-app/.env 에 없습니다.'
+          scp -i ~/.ssh/id_rsa docker-compose.prod.yml ubuntu@${{ secrets.EC2_HOST }}:/home/ubuntu/shopping-app/docker-compose.prod.yml
+
+      # 7️⃣ Redis + App Docker Compose Blue-Green 배포
+      - name: Deploy with Docker Compose Blue-Green
+        run: |
+          ssh -i ~/.ssh/id_rsa ubuntu@${{ secrets.EC2_HOST }} "APP_IMAGE='${{ secrets.DOCKERHUB_USERNAME }}/shopping-app:${{ github.sha }}' bash -s" <<'EOF'
+            set -euo pipefail
+
+            APP_DIR=/home/ubuntu/shopping-app
+            COMPOSE_FILE=docker-compose.prod.yml
+
+            cd "$APP_DIR"
+
+            if [ ! -f .env ]; then
+              echo ".env 파일이 $APP_DIR/.env 에 없습니다."
               exit 1
             fi
 
-            CURRENT_PORT=\$(grep -o '808[0-1]' /etc/nginx/sites-available/myapp | head -1)
-            if [ -z \"\$CURRENT_PORT\" ]; then CURRENT_PORT=8081; fi
+            if [ ! -f "$COMPOSE_FILE" ]; then
+              echo "$COMPOSE_FILE 파일이 없습니다."
+              exit 1
+            fi
 
-            if [ \"\$CURRENT_PORT\" = \"8080\" ]; then
+            if sudo docker compose version >/dev/null 2>&1; then
+              compose() {
+                sudo env APP_IMAGE="$APP_IMAGE" docker compose --env-file .env -f "$COMPOSE_FILE" "$@"
+              }
+            elif command -v docker-compose >/dev/null 2>&1; then
+              compose() {
+                sudo env APP_IMAGE="$APP_IMAGE" docker-compose --env-file .env -f "$COMPOSE_FILE" "$@"
+              }
+            else
+              echo "Docker Compose가 설치되어 있지 않습니다."
+              exit 1
+            fi
+
+            CURRENT_PORT=$(grep -o '808[0-1]' /etc/nginx/sites-available/myapp | head -1 || true)
+            if [ -z "$CURRENT_PORT" ]; then
+              CURRENT_PORT=8081
+            fi
+
+            if [ "$CURRENT_PORT" = "8080" ]; then
               NEW_PORT=8081
-              NEW_CONTAINER=\"shopping-app-green\"
-              OLD_CONTAINER=\"shopping-app-blue\"
+              NEW_SERVICE=app-green
+              OLD_SERVICE=app-blue
             else
               NEW_PORT=8080
-              NEW_CONTAINER=\"shopping-app-blue\"
-              OLD_CONTAINER=\"shopping-app-green\"
+              NEW_SERVICE=app-blue
+              OLD_SERVICE=app-green
             fi
-            echo \"배포 시작: \$CURRENT_PORT -> \$NEW_PORT\"
+            echo "배포 시작: $CURRENT_PORT -> $NEW_PORT ($NEW_SERVICE)"
 
-            sudo docker pull ${{ secrets.DOCKERHUB_USERNAME }}/shopping-app:latest
-            sudo docker rm -f \$NEW_CONTAINER || true
+            if sudo docker ps -a --format '{{.Names}}' | grep -qx 'shopping-redis-prod'; then
+              echo "Redis 컨테이너가 이미 존재합니다. 실행 상태만 보장합니다."
+              sudo docker start shopping-redis-prod >/dev/null 2>&1 || true
+            else
+              echo "Redis 컨테이너를 compose로 생성합니다."
+              compose up -d redis
+            fi
 
-            sudo docker run -d \
-              --name \$NEW_CONTAINER \
-              -p \$NEW_PORT:8080 \
-              --env-file /home/ubuntu/shopping-app/.env \
-              -e SPRING_PROFILES_ACTIVE=prod \
-              ${{ secrets.DOCKERHUB_USERNAME }}/shopping-app:latest
-
-            echo \"새 컨테이너(\$NEW_PORT) 헬스 체크 중...\"
-            for i in \$(seq 1 30); do
-              HTTP_CODE=\$(curl -s -o /dev/null -w \"%{http_code}\" http://localhost:\$NEW_PORT/ || echo \"000\")
-              HTTP_CODE=\${HTTP_CODE: -3}
-
-              if [ \"\$HTTP_CODE\" = \"200\" ] || [ \"\$HTTP_CODE\" = \"302\" ]; then
-                echo \"✅ 새 컨테이너가 준비되었습니다! (HTTP: \$HTTP_CODE)\"
-                break
+            echo "Redis 준비 확인 중..."
+            for i in $(seq 1 20); do
+              REDIS_CID=$(compose ps -q redis)
+              if [ -n "$REDIS_CID" ]; then
+                REDIS_STATUS=$(sudo docker inspect --format '{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}' "$REDIS_CID")
+                if [ "$REDIS_STATUS" = "healthy" ] || [ "$REDIS_STATUS" = "running" ]; then
+                  echo "Redis 준비 완료 ($REDIS_STATUS)"
+                  break
+                fi
               fi
-              if [ \$i -eq 30 ]; then
-                echo \"❌ 헬스 체크 실패 (\$HTTP_CODE). 배포를 중단하고 롤백합니다.\"
-                echo \"===== 컨테이너 로그 =====\"
-                sudo docker logs \$NEW_CONTAINER --tail 100
-                echo \"=========================\"
-                sudo docker stop \$NEW_CONTAINER || true
-                sudo docker rm \$NEW_CONTAINER || true
+
+              if [ "$i" -eq 20 ]; then
+                echo "Redis 준비 실패"
+                compose logs --tail 100 redis || true
                 exit 1
               fi
-              echo \"대기 중... (\$i/30) 응답: \$HTTP_CODE\"
+
+              sleep 3
+            done
+
+            compose pull "$NEW_SERVICE"
+            compose up -d "$NEW_SERVICE"
+
+            echo "새 앱($NEW_SERVICE, $NEW_PORT) 헬스 체크 중..."
+            for i in $(seq 1 30); do
+              HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" "http://localhost:$NEW_PORT/" || echo "000")
+              HTTP_CODE=${HTTP_CODE: -3}
+
+              if [ "$HTTP_CODE" = "200" ] || [ "$HTTP_CODE" = "302" ]; then
+                echo "새 컨테이너 준비 완료 (HTTP: $HTTP_CODE)"
+                break
+              fi
+
+              if [ "$i" -eq 30 ]; then
+                echo "헬스 체크 실패 ($HTTP_CODE). 롤백합니다."
+                compose logs --tail 100 "$NEW_SERVICE" || true
+                compose stop "$NEW_SERVICE" || true
+                exit 1
+              fi
+
+              echo "대기 중... ($i/30) 응답: $HTTP_CODE"
               sleep 5
             done
 
             sudo cp /etc/nginx/sites-available/myapp.template /etc/nginx/sites-available/myapp
-            sudo sed -i \"s/PORT_NUMBER/\$NEW_PORT/g\" /etc/nginx/sites-available/myapp
-            sudo nginx -t && sudo systemctl reload nginx
+            sudo sed -i "s/PORT_NUMBER/$NEW_PORT/g" /etc/nginx/sites-available/myapp
+            sudo nginx -t
+            sudo systemctl reload nginx
 
-            echo \"이전 컨테이너(\$OLD_CONTAINER) 종료...\"
-            sudo docker stop \$OLD_CONTAINER || true
-            sudo docker rm \$OLD_CONTAINER || true
+            echo "이전 앱 서비스($OLD_SERVICE) 중지..."
+            compose stop "$OLD_SERVICE" || true
 
             sudo docker image prune -f
-            echo \"배포 완료: 현재 포트 \$NEW_PORT\"
-          "
+            echo "배포 완료: 현재 포트 $NEW_PORT"
+          EOF

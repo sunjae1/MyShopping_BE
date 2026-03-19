@@ -1,27 +1,41 @@
+x-app-base: &app-base
+  image: ${APP_IMAGE:-sunjae1/shopping-app:latest}
+  pull_policy: always
+  restart: unless-stopped
+  env_file:
+    - ./.env
+  environment:
+    SPRING_PROFILES_ACTIVE: prod
+    REDIS_HOST: redis
+  depends_on:
+    redis:
+      condition: service_healthy
+
 services:
   redis:
     image: redis:7-alpine
     container_name: shopping-redis-prod
     restart: unless-stopped
-    ports:
-      - "6379:6379"
     volumes:
       - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 5s
 
-  app:
-    image: ${APP_IMAGE:-sunjae1/shopping-app:latest}
-    pull_policy: always
-    container_name: shopping-app
-    restart: unless-stopped
-    env_file:
-      - ./.env
+  app-blue:
+    <<: *app-base
+    container_name: shopping-app-blue
     ports:
       - "8080:8080"
-    environment:
-      SPRING_PROFILES_ACTIVE: prod
-      REDIS_HOST: redis
-    depends_on:
-      - redis
+
+  app-green:
+    <<: *app-base
+    container_name: shopping-app-green
+    ports:
+      - "8081:8080"
 
 volumes:
   redis-data:
