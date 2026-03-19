@@ -27,6 +27,11 @@ public class MemoryItemRepository implements ItemRepository {
         return Optional.ofNullable(store.get(id));
     }
 
+    @Override
+    public Optional<Item> findByIdForUpdate(Long id) {
+        return findById(id);
+    }
+
     //전체 상품 조회
     @Override
     public List<Item> findAll() {
@@ -42,6 +47,7 @@ public class MemoryItemRepository implements ItemRepository {
         findItem.setPrice(updateParam.getPrice());
         findItem.setQuantity(updateParam.getQuantity());
         findItem.setImageUrl(updateParam.getImageUrl());
+        findItem.changeCategory(updateParam.getCategory());
 
     }
 

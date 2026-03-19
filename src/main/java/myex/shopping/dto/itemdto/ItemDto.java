@@ -18,6 +18,10 @@ public class ItemDto {
     private int price;
     @Schema(description = "상품재고 수량", example = "30")
     private int quantity;
+    @Schema(description = "카테고리 ID", example = "1")
+    private Long categoryId;
+    @Schema(description = "카테고리 이름", example = "상의")
+    private String categoryName;
     @Schema(description = "상품 이미지 URL (Pre-signed URL)", example = "https://bucket.s3.amazonaws.com/images/1.webp?X-Amz-...")
     @Setter
     private String imageUrl;
@@ -27,6 +31,8 @@ public class ItemDto {
         this.itemName = item.getItemName();
         this.price = item.getPrice();
         this.quantity = item.getQuantity();
+        this.categoryId = item.getCategory() != null ? item.getCategory().getId() : null;
+        this.categoryName = item.getCategory() != null ? item.getCategory().getName() : null;
         this.imageUrl = item.getImageUrl();
     }
 }

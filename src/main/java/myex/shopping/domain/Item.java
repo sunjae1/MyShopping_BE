@@ -1,11 +1,10 @@
 package myex.shopping.domain;
 
 import jakarta.persistence.*;
-import lombok.Data;
 import lombok.Getter;
 import lombok.Setter;
+import myex.shopping.exception.InsufficientStockException;
 import org.hibernate.annotations.SQLDelete;
-import org.hibernate.annotations.Where;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.util.Objects;
@@ -16,7 +15,6 @@ import java.util.Objects;
 @Setter
 @Entity
 @SQLDelete(sql = "UPDATE item SET deleted = true WHERE id = ?")
-//@Where(clause = "deleted = false")
 public class Item {
 
     @Id
@@ -53,11 +51,26 @@ public class Item {
         this.quantity = quantity;
     }
 
+    public void changeCategory(Category category) {
+        if (this.category != null) {
+            this.category.getItems().removeIf(existingItem -> existingItem == this);
+        }
+
+        this.category = category;
+
+        if (category != null) {
+            boolean alreadyMapped = category.getItems().stream()
+                    .anyMatch(existingItem -> existingItem == this);
+            if (!alreadyMapped) {
+                category.getItems().add(this);
+            }
+        }
+    }
 
     public void decreaseStock(int quantity) {
         int decreasedQuantity = this.quantity - quantity;
         if (decreasedQuantity <0)
-            throw new RuntimeException("not enough stock");
+            throw new InsufficientStockException("재고가 부족합니다.");
         this.quantity = decreasedQuantity;
     }
 

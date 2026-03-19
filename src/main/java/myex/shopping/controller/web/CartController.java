@@ -76,22 +76,7 @@ public class CartController {
             model.addAttribute("item", imageService.resolveImageUrl(new ItemDto(item)));
             return "cart/cartForm";
         }
-        Cart cart = cartService.findOrCreateCartForUser(loginUser);
-        boolean result = cart.addItem(item, cartForm.getQuantity());
-        if (result == false) {
-            log.info("장바구니 담기 : 전체 장바구니 수량이 상품 총 수량을 넘었습니다.");
-            bindingResult.rejectValue("quantity", "TotalExceed", "전체 장바구니 수량이 상품 총 수량을 넘었습니다.");
-        }
-        if (bindingResult.hasErrors()) {
-            log.info("검증 실패 : {}", bindingResult);
-            model.addAttribute("item", imageService.resolveImageUrl(new ItemDto(item)));
-            return "cart/cartForm";
-        }
-        if (cart.getId() != null) {
-            log.info("장바구니 담기 : em.merge");
-            cartService.update(cart);
-        }
-        log.info("cart.getId() : {}", cart.getId());
+        cartService.addItem(loginUser, item.getId(), cartForm.getQuantity());
         return "redirect:/";
     }
 

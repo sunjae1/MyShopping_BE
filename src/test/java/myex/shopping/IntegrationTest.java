@@ -1,6 +1,7 @@
 package myex.shopping;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import jakarta.servlet.http.Cookie;
 import myex.shopping.domain.*;
 import myex.shopping.dto.userdto.LoginRequestDto;
 import myex.shopping.dto.userdto.PrincipalDetails;
@@ -9,7 +10,9 @@ import myex.shopping.form.PostForm;
 import myex.shopping.repository.ItemRepository;
 import myex.shopping.repository.OrderRepository;
 import myex.shopping.repository.UserRepository;
+import myex.shopping.repository.jpa.JpaCategoryRepository;
 import myex.shopping.service.ImageService;
+import myex.shopping.support.RedisBackedSpringBootTest;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -38,7 +41,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @SpringBootTest
 @AutoConfigureMockMvc
 @Transactional
-public class IntegrationTest {
+public class IntegrationTest extends RedisBackedSpringBootTest {
 
     @Autowired
     private MockMvc mockMvc;
@@ -54,6 +57,9 @@ public class IntegrationTest {
 
     @Autowired
     private OrderRepository orderRepository;
+
+    @Autowired
+    private JpaCategoryRepository categoryRepository;
 
     @Autowired
     private PasswordEncoder passwordEncoder;
@@ -114,6 +120,10 @@ public class IntegrationTest {
         MockHttpSession session = new MockHttpSession();
         session.setAttribute("loginUser", loggedInUser);
 
+        Category category = new Category();
+        category.setName("테스트 카테고리");
+        categoryRepository.save(category);
+
         // 3. 상품 추가 (웹 UI 통해)
         MockMultipartFile imageFile = new MockMultipartFile("imageFile", "test-image.jpg", "image/jpeg",
                 "image_content".getBytes());
@@ -126,6 +136,7 @@ public class IntegrationTest {
                         .param("itemName", "Test Item")
                         .param("price", "10000")
                         .param("quantity", "100")
+                        .param("categoryId", category.getId().toString())
                         .contentType(MediaType.MULTIPART_FORM_DATA))
                 .andExpect(status().is3xxRedirection())
                 .andReturn();
@@ -138,7 +149,25 @@ public class IntegrationTest {
         mockMvc.perform(get("/items/{itemId}", itemId)
                         .with(user(principalDetails)))
                 .andExpect(status().isOk())
-                .andExpect(content().string(containsString("Test Item")));
+                .andExpect(content().string(containsString("Test Item")))
+                .andExpect(content().string(containsString(category.getName())));
+
+        // 3.2 CSR용 API 로그인 후 HttpOnly 쿠키 발급
+        LoginRequestDto apiLoginRequest = new LoginRequestDto();
+        apiLoginRequest.setEmail("testuser@example.com");
+        apiLoginRequest.setPassword("password");
+
+        MvcResult apiLoginResult = mockMvc.perform(post("/api/login")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(apiLoginRequest)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.accessTokenExpiresInSeconds").value(300))
+                .andExpect(jsonPath("$.user.email").value("testuser@example.com"))
+                .andReturn();
+
+        assertThat(findSetCookieHeader(apiLoginResult, "ACCESS_TOKEN")).contains("HttpOnly");
+        assertThat(findSetCookieHeader(apiLoginResult, "REFRESH_TOKEN")).contains("HttpOnly");
+        Cookie accessCookie = extractCookie(apiLoginResult, "ACCESS_TOKEN");
 
         // 4. 장바구니에 상품 담기 (API 엔드포인트)
         CartForm cartForm = new CartForm();
@@ -146,7 +175,7 @@ public class IntegrationTest {
         cartForm.setQuantity(1);
 
         mockMvc.perform(post("/api/cart/items/{itemId}", itemId)
-                        .with(user(principalDetails))
+                        .cookie(accessCookie)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(cartForm)))
                 .andDo(print())
@@ -172,7 +201,7 @@ public class IntegrationTest {
         postForm.setContent("This is the content of the new post.");
 
         mockMvc.perform(post("/api/posts")
-                        .with(user(principalDetails))
+                        .cookie(accessCookie)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(postForm)))
                 .andExpect(status().isCreated())
@@ -254,13 +283,19 @@ public class IntegrationTest {
         loginRequest.setEmail("apiuser@example.com");
         loginRequest.setPassword("password");
 
-        mockMvc.perform(post("/api/login")
+        MvcResult loginResult = mockMvc.perform(post("/api/login")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(loginRequest)))
                 .andExpect(status().isOk())
                 .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_JSON))
-                .andExpect(jsonPath("$.email").value("apiuser@example.com"))
-                .andExpect(jsonPath("$.name").value("Api User"));
+                .andExpect(jsonPath("$.accessTokenExpiresInSeconds").value(300))
+                .andExpect(jsonPath("$.user.email").value("apiuser@example.com"))
+                .andExpect(jsonPath("$.user.name").value("Api User"))
+                .andReturn();
+
+        assertThat(loginResult.getResponse().getHeaders("Set-Cookie"))
+                .anyMatch(header -> header.startsWith("ACCESS_TOKEN="))
+                .anyMatch(header -> header.startsWith("REFRESH_TOKEN="));
     }
 
     @Test
@@ -273,6 +308,7 @@ public class IntegrationTest {
         mockMvc.perform(post("/api/login")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(loginRequest)))
-                .andExpect(status().isUnauthorized());
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.code").value("LOGIN_FAILED"));
     }
 }

@@ -1,10 +1,12 @@
 package myex.shopping.controller.api;
 
+import myex.shopping.domain.Category;
 import myex.shopping.domain.Item;
 import myex.shopping.dto.itemdto.ItemDto;
 import myex.shopping.dto.itemdto.ItemDtoDetail;
 import myex.shopping.dto.itemdto.ItemEditDto;
 import myex.shopping.repository.ItemRepository;
+import myex.shopping.repository.jpa.JpaCategoryRepository;
 import myex.shopping.service.ImageService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -44,11 +46,16 @@ class ApiItemControllerTest {
     @Autowired
     private ItemRepository itemRepository;
 
+    @Autowired
+    private JpaCategoryRepository categoryRepository;
+
     @MockitoBean
     private ImageService imageService;
 
     private Item testItem1;
     private Item testItem2;
+    private Category topCategory;
+    private Category bottomCategory;
 
     @BeforeEach
     void setUp() throws IOException {
@@ -62,8 +69,18 @@ class ApiItemControllerTest {
         when(imageService.resolveImageUrl(any(ItemEditDto.class))).thenAnswer(invocation -> invocation.getArgument(0));
         when(imageService.generatePresignedUrl(any())).thenReturn("https://fake-presigned-url.com/image.jpg");
 
+        topCategory = new Category();
+        topCategory.setName("상의");
+        categoryRepository.save(topCategory);
+
+        bottomCategory = new Category();
+        bottomCategory.setName("하의");
+        categoryRepository.save(bottomCategory);
+
         testItem1 = new Item("테스트 상품 1", 10000, 10, "images/test1.jpg");
+        testItem1.changeCategory(topCategory);
         testItem2 = new Item("테스트 상품 2", 25000, 5, "images/test2.jpg");
+        testItem2.changeCategory(bottomCategory);
         itemRepository.save(testItem1);
         itemRepository.save(testItem2);
     }
@@ -78,8 +95,34 @@ class ApiItemControllerTest {
                 .andExpect(content().contentType(MediaType.APPLICATION_JSON))
                 .andExpect(jsonPath("$", hasSize(2)))
                 .andExpect(jsonPath("$[0].itemName", is(testItem1.getItemName())))
+                .andExpect(jsonPath("$[0].categoryName", is(testItem1.getCategory().getName())))
                 .andExpect(jsonPath("$[0].price", is(testItem1.getPrice())))
                 .andExpect(jsonPath("$[1].itemName", is(testItem2.getItemName())));
+    }
+
+    @Test
+    @DisplayName("카테고리 필터로 상품 목록을 조회할 수 있다")
+    void getItems_shouldFilterByCategory() throws Exception {
+        mockMvc.perform(get("/api/items")
+                        .param("categoryId", topCategory.getId().toString())
+                        .contentType(MediaType.APPLICATION_JSON))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$", hasSize(1)))
+                .andExpect(jsonPath("$[0].itemName", is(testItem1.getItemName())))
+                .andExpect(jsonPath("$[0].categoryId", is(topCategory.getId().intValue())));
+    }
+
+    @Test
+    @DisplayName("검색어와 카테고리 필터를 함께 적용할 수 있다")
+    void getItems_shouldFilterByKeywordAndCategory() throws Exception {
+        mockMvc.perform(get("/api/items")
+                        .param("categoryId", bottomCategory.getId().toString())
+                        .param("keyword", "상품 2")
+                        .contentType(MediaType.APPLICATION_JSON))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$", hasSize(1)))
+                .andExpect(jsonPath("$[0].itemName", is(testItem2.getItemName())))
+                .andExpect(jsonPath("$[0].categoryName", is(bottomCategory.getName())));
     }
 
     @Test
@@ -93,6 +136,7 @@ class ApiItemControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(content().contentType(MediaType.APPLICATION_JSON))
                 .andExpect(jsonPath("$.itemName", is(testItem1.getItemName())))
+                .andExpect(jsonPath("$.categoryName", is(testItem1.getCategory().getName())))
                 .andExpect(jsonPath("$.price", is(testItem1.getPrice())))
                 .andExpect(jsonPath("$.quantity", is(testItem1.getQuantity())));
     }
@@ -120,10 +164,13 @@ class ApiItemControllerTest {
                         .param("itemName", "새로운 상품")
                         .param("price", "30000")
                         .param("quantity", "20")
+                        .param("categoryId", topCategory.getId().toString())
                         .contentType(MediaType.MULTIPART_FORM_DATA))
                 .andDo(print())
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.itemName", is("새로운 상품")))
+                .andExpect(jsonPath("$.categoryId", is(topCategory.getId().intValue())))
+                .andExpect(jsonPath("$.categoryName", is(topCategory.getName())))
                 .andExpect(jsonPath("$.price", is(30000)))
                 .andExpect(header().exists("Location"));
     }
@@ -141,10 +188,13 @@ class ApiItemControllerTest {
                         .param("itemName", "수정된 상품 이름")
                         .param("price", "12000")
                         .param("quantity", "5")
+                        .param("categoryId", bottomCategory.getId().toString())
                         .contentType(MediaType.MULTIPART_FORM_DATA))
                 .andDo(print())
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.itemName", is("수정된 상품 이름")))
+                .andExpect(jsonPath("$.categoryId", is(bottomCategory.getId().intValue())))
+                .andExpect(jsonPath("$.categoryName", is(bottomCategory.getName())))
                 .andExpect(jsonPath("$.price", is(12000)));
     }
 

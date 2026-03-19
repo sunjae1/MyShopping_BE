@@ -6,7 +6,6 @@ import lombok.Getter;
 import lombok.Setter;
 
 @Getter
-@Setter
 @Schema(description = "로그인 요청 DTO")
 public class LoginRequestDto {
 
@@ -17,4 +16,12 @@ public class LoginRequestDto {
     @NotBlank(message = "비밀번호는 필수 입니다.")
     @Schema(description = "사용자 비밀번호", example = "test1231!@")
     private String password;
+
+    public void setEmail(String email) {
+        this.email = email == null ? null : email.trim();
+    }
+
+    public void setPassword(String password) {
+        this.password = password;
+    }
 }

@@ -1,4 +1,4 @@
-package myex.shopping.config;
+package myex.shopping.security;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.servlet.ServletException;

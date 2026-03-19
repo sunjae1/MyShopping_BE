@@ -7,42 +7,56 @@ import myex.shopping.domain.Cart;
 import myex.shopping.domain.Item;
 import myex.shopping.domain.User;
 import myex.shopping.dto.cartdto.CartDto;
+import myex.shopping.exception.InsufficientStockException;
 import myex.shopping.exception.ResourceNotFoundException;
 import myex.shopping.repository.CartRepository;
 import myex.shopping.repository.ItemRepository;
 import myex.shopping.repository.UserRepository;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
+
+import java.util.function.Supplier;
 
 @Slf4j
 @Service
 @RequiredArgsConstructor
-@Transactional(readOnly = true)
 public class CartService {
     private final ItemRepository itemRepository;
     private final CartRepository cartRepository;
     private final UserRepository userRepository;
     private final ImageService imageService;
     private final EntityManager em;
+    private final PlatformTransactionManager transactionManager;
 
-    @Transactional(readOnly = false)
     public Cart findOrCreateCartForUser(User sessionUser) {
-        // 로그인 처리 예외로 바꾸기.
-        if (sessionUser == null) {
-            throw new ResourceNotFoundException("user not found");
-        }
-        User user = userRepository.findById(sessionUser.getId())
-                .orElseThrow(() -> new ResourceNotFoundException("user not found"));
+        Long userId = requireUserId(sessionUser);
+        return retryOnCartUniqueViolation(() -> executeInWriteTransaction(() -> {
+            User user = loadUser(userId);
+            return cartRepository.findByUser(user)
+                    .orElseGet(() -> createCart(user));
+        }));
+    }
 
-        // 사용자별 장바구니 찾거나 새로 만들어서 사용자와 연결 후 반환.
-        return cartRepository.findByUser(sessionUser)
-                .orElseGet(() -> {
-                    Cart newCart = new Cart();
-                    // 더티체킹.
-                    user.addCart(newCart);
-                    log.info("findOrCreateCartForUser 메소드 끝"); // 더티 체킹 : 메소드 끝나는 commit 시점에 INSERT 문 실행.
-                    return newCart; // 지역변수로 newCart는 사라지지만 객체 주소를 가진 외부 변수가 있으므로 new Cart();는 GC 안됨.
-                });
+    public Cart addItem(User sessionUser, Long itemId, int quantity) {
+        Long userId = requireUserId(sessionUser);
+        return retryOnCartUniqueViolation(() -> executeInWriteTransaction(() -> {
+            User user = loadUser(userId);
+            Item item = itemRepository.findById(itemId)
+                    .orElseThrow(() -> new ResourceNotFoundException("item not found"));
+            Cart cart = cartRepository.findByUser(user)
+                    .orElseGet(() -> createCart(user));
+
+            boolean added = cart.addItem(item, quantity);
+            if (!added) {
+                throw new InsufficientStockException("상품 재고 수량을 초과할 수 없습니다.");
+            }
+
+            em.flush();
+            return cart;
+        }));
     }
 
     // 장바구니 전체 DTO 변환
@@ -103,7 +117,9 @@ public class CartService {
         // 없는 아이템 삭제 -> 예외 발생.
         Item item = itemRepository.findById(itemId)
                 .orElseThrow(() -> new ResourceNotFoundException("cart not found"));
-        Cart cart = findOrCreateCartForUser(loginUser);
+        User user = loadUser(requireUserId(loginUser));
+        Cart cart = cartRepository.findByUser(user)
+                .orElseThrow(() -> new ResourceNotFoundException("cart not found"));
         // 더티 체킹 - Commit 시점에 delete 쿼리 실행됨.
         cart.removeItem(item);
         return cart;
@@ -122,5 +138,66 @@ public class CartService {
         // User CASCADETYPE.ALL 이라서 Cart에도 전파(더티 체킹)
         user.deleteCart(cart);
         log.info("deleteCart 후");
+    }
+
+    private Cart createCart(User user) {
+        Cart newCart = new Cart();
+        user.addCart(newCart);
+        em.flush();
+        return newCart;
+    }
+
+    private User loadUser(Long userId) {
+        return userRepository.findById(userId)
+                .orElseThrow(() -> new ResourceNotFoundException("user not found"));
+    }
+
+    private Long requireUserId(User sessionUser) {
+        if (sessionUser == null) {
+            throw new ResourceNotFoundException("user not found");
+        }
+        return sessionUser.getId();
+    }
+
+    private Cart executeInWriteTransaction(Supplier<Cart> action) {
+        TransactionTemplate transactionTemplate = new TransactionTemplate(transactionManager);
+        transactionTemplate.setReadOnly(false);
+        return transactionTemplate.execute(status -> action.get());
+    }
+
+    private Cart retryOnCartUniqueViolation(Supplier<Cart> action) {
+        try {
+            return action.get();
+        } catch (RuntimeException ex) {
+            if (!isCartUniqueViolation(ex)) {
+                throw ex;
+            }
+
+            log.info("cart unique 충돌 감지, 기존 장바구니 재조회 후 재시도");
+            return action.get();
+        }
+    }
+
+    private boolean isCartUniqueViolation(Throwable throwable) {
+        Throwable current = throwable;
+        while (current != null) {
+            String message = current.getMessage();
+            if (current instanceof DataIntegrityViolationException && message != null && isCartUniqueViolationMessage(message)) {
+                return true;
+            }
+            if (message != null && isCartUniqueViolationMessage(message)) {
+                return true;
+            }
+            current = current.getCause();
+        }
+        return false;
+    }
+
+    private boolean isCartUniqueViolationMessage(String message) {
+        String normalizedMessage = message.toLowerCase();
+        return normalizedMessage.contains("uk_cart_user")
+                || normalizedMessage.contains("cart(user_id")
+                || normalizedMessage.contains("cart (user_id")
+                || normalizedMessage.contains("23505");
     }
 }

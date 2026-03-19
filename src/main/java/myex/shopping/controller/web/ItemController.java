@@ -14,6 +14,7 @@ import myex.shopping.exception.ResourceNotFoundException;
 import myex.shopping.form.ItemAddForm;
 import myex.shopping.form.ItemEditForm;
 import myex.shopping.repository.ItemRepository;
+import myex.shopping.service.CategoryService;
 import myex.shopping.service.ImageService;
 import myex.shopping.service.ItemService;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -34,6 +35,7 @@ public class ItemController {
 
     private final ItemRepository itemRepository; // 생성자 주입.
     private final ItemService itemService;
+    private final CategoryService categoryService;
     private final ImageService imageService;
 
     // 전체 아이템 조회 (+검색 추가)
@@ -49,6 +51,7 @@ public class ItemController {
         }
         List<ItemDto> items = itemService.findItems(keyword, categoryId);
         model.addAttribute("items", items);
+        model.addAttribute("categories", categoryService.findAll());
         return "items/items";
     }
 
@@ -76,12 +79,8 @@ public class ItemController {
     @GetMapping("/add")
     public String addForm(Model model,
                           HttpSession session) {
-        User loginUser = (User) session.getAttribute("loginUser");
-        if (loginUser != null) {
-            UserDto userDto = new UserDto(loginUser);
-            model.addAttribute("user", userDto);
-        }
-        // th:object 위해 빈 객체 전달.
+        addUserIfPresent(model, session);
+        addCategoryOptions(model);
         model.addAttribute("item", new ItemAddForm());
         return "items/addForm";
     }
@@ -91,13 +90,17 @@ public class ItemController {
     @PostMapping("/add")
     public String addItem(@Valid @ModelAttribute("item") ItemAddForm form,
                           BindingResult bindingResult,
-                          RedirectAttributes redirectAttributes) throws IOException {
+                          RedirectAttributes redirectAttributes,
+                          Model model,
+                          HttpSession session) throws IOException {
         // 업로드 시 UploadFolder 에 있는 사진 업로드 시도 하면, "같은 경로 + 같은 파일명" 이라 같다고 판단해 move
         // 불가능.(오류 발생. -> UUID로 바꿀시, "같은 경로 + 다른 파일명" 이라 다른 파일이라 판단하고 업로드 가능.
         // "다른 경로 + 같은 파일명" : 덮어쓰기.
         validateImageFile(form, bindingResult);
         if (bindingResult.hasErrors()) {
             log.info("상품 폼 검증 실패 : {}", bindingResult);
+            addUserIfPresent(model, session);
+            addCategoryOptions(model);
             return "items/addForm";
         }
         Long savedItemId = itemService.createItem(form);
@@ -120,11 +123,8 @@ public class ItemController {
                            HttpSession session) {
         Item item = itemRepository.findById(itemId)
                 .orElseThrow(() -> new ResourceNotFoundException("item not found"));
-        User loginUser = (User) session.getAttribute("loginUser");
-        if (loginUser != null) {
-            UserDto userDto = new UserDto(loginUser);
-            model.addAttribute("user", userDto);
-        }
+        addUserIfPresent(model, session);
+        addCategoryOptions(model);
 
         model.addAttribute("item", imageService.resolveImageUrl(new ItemEditDto(item)));
         return "items/editForm";
@@ -134,12 +134,16 @@ public class ItemController {
     @PostMapping("/{itemId}/edit")
     public String edit(@PathVariable Long itemId,
                        @Valid @ModelAttribute("item") ItemEditForm form,
-                       BindingResult bindingResult) throws IOException {
+                       BindingResult bindingResult,
+                       Model model,
+                       HttpSession session) throws IOException {
         log.info("아이템 수정 요청 컨트롤러 진입");
         log.info("form 정보 : {}", form);
         if (bindingResult.hasErrors()) {
             log.info("검증 실패 : {}", bindingResult);
             form.setId(itemId);
+            addUserIfPresent(model, session);
+            addCategoryOptions(model);
             return "items/editForm";
         }
         itemService.editItemWithUUID(form, itemId);
@@ -156,8 +160,19 @@ public class ItemController {
     @PreAuthorize("hasRole('ADMIN')")
     @PostMapping("/{itemId}/delete")
     public String deleteItem(@PathVariable Long itemId) {
-        itemRepository.deleteItem(itemId);
+        itemService.deleteItem(itemId);
         return "redirect:/items";
     }
 
+    private void addUserIfPresent(Model model, HttpSession session) {
+        User loginUser = (User) session.getAttribute("loginUser");
+        if (loginUser != null) {
+            UserDto userDto = new UserDto(loginUser);
+            model.addAttribute("user", userDto);
+        }
+    }
+
+    private void addCategoryOptions(Model model) {
+        model.addAttribute("categories", categoryService.findAll());
+    }
 }

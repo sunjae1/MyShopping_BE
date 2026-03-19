@@ -13,6 +13,7 @@ import myex.shopping.dto.userdto.UserDto;
 import myex.shopping.exception.ResourceNotFoundException;
 import myex.shopping.repository.jpa.JpaCategoryRepository;
 import myex.shopping.service.CategoryService;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
 import org.springframework.validation.BindingResult;
@@ -20,7 +21,6 @@ import org.springframework.web.bind.annotation.*;
 import org.springframework.web.servlet.mvc.support.RedirectAttributes;
 
 import java.util.List;
-import java.util.stream.Collectors;
 
 @Controller
 @RequestMapping("/categories")
@@ -39,14 +39,13 @@ public class CategoryController {
             UserDto userDto = new UserDto(loginUser);
             model.addAttribute("user",userDto);
         }
-        List<CategoryDTO> categories = categoryRepository.findAll().stream()
-                .map(CategoryDTO::new)
-                .collect(Collectors.toList());
+        List<CategoryDTO> categories = categoryService.findAll();
         model.addAttribute("categories", categories);
         return "categories/list";
     }
 
     @GetMapping("/add")
+    @PreAuthorize("hasRole('ADMIN')")
     public String addForm(Model model,
                           HttpSession session) {
         User loginUser = (User) session.getAttribute("loginUser");
@@ -59,6 +58,7 @@ public class CategoryController {
     }
 
     @PostMapping("/add")
+    @PreAuthorize("hasRole('ADMIN')")
     public String addCategory(@Valid @ModelAttribute("category") CategoryCreateDTO categoryCreateDTO,
                               BindingResult bindingResult,
                               RedirectAttributes redirectAttributes,
@@ -80,6 +80,7 @@ public class CategoryController {
     }
 
     @GetMapping("/{categoryId}/edit")
+    @PreAuthorize("hasRole('ADMIN')")
     public String editForm(@PathVariable Long categoryId,
                            Model model,
                            HttpSession session) {
@@ -95,6 +96,7 @@ public class CategoryController {
     }
 
     @PostMapping("/{categoryId}/edit")
+    @PreAuthorize("hasRole('ADMIN')")
     public String editCategory(@PathVariable Long categoryId,
                                @Valid @ModelAttribute("category") CategoryEditDTO categoryEditDTO,
                                BindingResult bindingResult,
@@ -116,6 +118,7 @@ public class CategoryController {
     }
 
     @PostMapping("/{categoryId}/delete")
+    @PreAuthorize("hasRole('ADMIN')")
     public String deleteCategory(@PathVariable Long categoryId, RedirectAttributes redirectAttributes) {
         categoryService.deleteCategory(categoryId);
         redirectAttributes.addFlashAttribute("message", "카테고리가 성공적으로 삭제되었습니다.");

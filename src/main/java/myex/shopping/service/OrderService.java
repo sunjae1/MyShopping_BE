@@ -14,6 +14,7 @@ import myex.shopping.repository.OrderRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.Comparator;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -32,9 +33,11 @@ public class OrderService {
         Cart cart = cartRepository.findByUser(user)
                 .orElseThrow(() -> new ResourceNotFoundException("Cart not found"));
 
-        for (CartItem cartItem : cart.getCartItems()) {
+        for (CartItem cartItem : cart.getCartItems().stream()
+                .sorted(Comparator.comparing(cartItem -> cartItem.getItem().getId()))
+                .toList()) {
             // DB에서 직접 item 조회해서 영속 상태 item 가져옴.(재고 반영을 위해서)
-            Item persistentItem = itemRepository.findById(cartItem.getItem().getId())
+            Item persistentItem = itemRepository.findByIdForUpdate(cartItem.getItem().getId())
                     .orElseThrow(() -> new IllegalArgumentException("상품을 찾을 수 없습니다."));
 
             order.addOrderItem(new OrderItem(persistentItem, cartItem.getItem().getPrice(), cartItem.getQuantity()));
@@ -57,6 +60,10 @@ public class OrderService {
 
         // 주문자와 로그인한 사용자가 같은지 확인
         if (order.getUser().getId().equals(loginUser.getId())) {
+            order.getOrderItems().stream()
+                    .sorted(Comparator.comparing(orderItem -> orderItem.getItem().getId()))
+                    .forEach(orderItem -> itemRepository.findByIdForUpdate(orderItem.getItem().getId())
+                            .orElseThrow(() -> new ResourceNotFoundException("item not found")));
             order.cancel();
             return order;
         } else {

@@ -9,7 +9,6 @@ import lombok.Setter;
 
 
 @Getter
-@Setter
 @Schema(description = "로그인 정보 담는 FORM")
 public class LoginForm {
 
@@ -24,4 +23,12 @@ public class LoginForm {
     @Size(min = 3, max = 15, message = "비밀번호는 3자 이상 15자 이하 입니다.")
     @Schema(description = "사용자 비밀번호", example = "test!@#!@!A")
     private String password;
+
+    public void setEmail(String email) {
+        this.email = email == null ? null : email.trim();
+    }
+
+    public void setPassword(String password) {
+        this.password = password;
+    }
 }

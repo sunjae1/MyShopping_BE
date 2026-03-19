@@ -20,7 +20,11 @@ public class JpaCartRepository implements CartRepository {
     @Transactional(readOnly = false)
     @Override
     public Cart save(Cart cart) {
-        em.persist(cart);
+        if (cart.getId() == null) {
+            em.persist(cart);
+        } else {
+            cart = em.merge(cart);
+        }
         return cart;
     }
 

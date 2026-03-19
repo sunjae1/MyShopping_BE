@@ -11,15 +11,26 @@
 
 <nav th:replace="~{fragments/nav :: nav}"></nav>
 
-<!-- 검색 폼 추가 시작 -->
 <div class="container search-form-container">
-    <form th:action="@{/}" method="get" class="search-form">
-        <input type="hidden" name="categoryId" th:value="${param.categoryId}">
-        <input type="text" name="keyword" th:value="${param.keyword}" placeholder="상품 이름 검색">
-        <button type="submit" class="btn btn-search">검색</button>
-    </form>
+    <div class="catalog-toolbar">
+        <div class="category-filter-bar">
+            <a th:href="@{/(keyword=${param.keyword})}"
+               th:classappend="${param.categoryId == null} ? ' active' : ''"
+               class="category-filter-chip">전체</a>
+            <a th:each="category : ${categories}"
+               th:href="@{/(categoryId=${category.id}, keyword=${param.keyword})}"
+               th:classappend="${param.categoryId != null and param.categoryId[0] == #strings.toString(category.id)} ? ' active' : ''"
+               class="category-filter-chip"
+               th:text="${category.name}">카테고리</a>
+        </div>
+
+        <form th:action="@{/}" method="get" class="search-form">
+            <input type="hidden" name="categoryId" th:value="${param.categoryId}">
+            <input type="text" name="keyword" th:value="${param.keyword}" placeholder="상품 이름 검색">
+            <button type="submit" class="btn btn-search">검색</button>
+        </form>
+    </div>
 </div>
-<!-- 검색 폼 추가 끝 -->
 
 <div class="container">
     <p class="field-error" th:if="${errorPV}" th:text="${errorPV}"></p>

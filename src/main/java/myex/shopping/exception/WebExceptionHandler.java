@@ -44,6 +44,20 @@ public class WebExceptionHandler {
         return "error/403";
     }
 
+    @ExceptionHandler(DuplicateResourceException.class)
+    @ResponseStatus(HttpStatus.CONFLICT)
+    public String handleDuplicateResource(DuplicateResourceException e, Model model) {
+        model.addAttribute("errorMessage", e.getMessage());
+        return "error";
+    }
+
+    @ExceptionHandler(InsufficientStockException.class)
+    @ResponseStatus(HttpStatus.BAD_REQUEST)
+    public String handleInsufficientStock(InsufficientStockException e, Model model) {
+        model.addAttribute("errorMessage", e.getMessage());
+        return "error";
+    }
+
     // 일반 서버 오류 (500)
     @ExceptionHandler(Exception.class)
     @ResponseStatus(HttpStatus.INTERNAL_SERVER_ERROR)

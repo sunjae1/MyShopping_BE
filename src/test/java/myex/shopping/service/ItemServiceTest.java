@@ -1,11 +1,13 @@
 package myex.shopping.service;
 
 import jakarta.persistence.EntityManager;
+import myex.shopping.domain.Category;
 import myex.shopping.domain.Item;
 import myex.shopping.dto.itemdto.ItemDto;
 import myex.shopping.form.ItemAddForm;
 import myex.shopping.form.ItemEditForm;
 import myex.shopping.repository.ItemRepository;
+import myex.shopping.repository.jpa.JpaCategoryRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -37,13 +39,16 @@ class ItemServiceTest {
     private ImageService imageService;
 
     @Mock
+    private JpaCategoryRepository categoryRepository;
+
+    @Mock
     private EntityManager em;
 
     private ItemService itemService;
 
     @BeforeEach
     void setUp() {
-        itemService = new ItemService(itemRepository, imageService, em);
+        itemService = new ItemService(itemRepository, categoryRepository, imageService, em);
         itemService = spy(itemService);
     }
 
@@ -75,11 +80,16 @@ class ItemServiceTest {
         form.setItemName("New Item");
         form.setPrice(15000);
         form.setQuantity(30);
+        form.setCategoryId(7L);
         MockMultipartFile imageFile = new MockMultipartFile("imageFile", "test.jpg", "image/jpeg", "test image".getBytes());
         form.setImageFile(imageFile);
 
         String mockImageKey = "images/mock-image.jpg";
         given(imageService.storeFile(any(MockMultipartFile.class))).willReturn(mockImageKey);
+        Category category = new Category();
+        category.setId(7L);
+        category.setName("상의");
+        given(categoryRepository.findById(7L)).willReturn(Optional.of(category));
 
         Item savedItem = new Item();
         savedItem.setId(1L);
@@ -96,6 +106,7 @@ class ItemServiceTest {
         assertThat(itemId).isEqualTo(1L);
         assertThat(capturedItem.getItemName()).isEqualTo("New Item");
         assertThat(capturedItem.getImageUrl()).isEqualTo(mockImageKey);
+        assertThat(capturedItem.getCategory()).isSameAs(category);
     }
 
     @Test
@@ -129,12 +140,17 @@ class ItemServiceTest {
         form.setItemName("Edited Item");
         form.setPrice(25000);
         form.setQuantity(50);
+        form.setCategoryId(8L);
         MockMultipartFile imageFile = new MockMultipartFile("imageFile", "edit.png", "image/png", "edited image".getBytes());
         form.setImageFile(imageFile);
 
         Item existingItem = new Item("Original Item", 10000, 10);
         existingItem.setId(itemId);
         given(itemRepository.findById(itemId)).willReturn(Optional.of(existingItem));
+        Category category = new Category();
+        category.setId(8L);
+        category.setName("하의");
+        given(categoryRepository.findById(8L)).willReturn(Optional.of(category));
 
         String mockImageKey = "images/mock-edited-image.png";
         given(imageService.storeFile(any(MockMultipartFile.class))).willReturn(mockImageKey);
@@ -152,6 +168,6 @@ class ItemServiceTest {
         assertThat(capturedItem.getPrice()).isEqualTo(25000);
         assertThat(capturedItem.getQuantity()).isEqualTo(50);
         assertThat(capturedItem.getImageUrl()).isEqualTo(mockImageKey);
+        assertThat(capturedItem.getCategory()).isSameAs(category);
     }
 }
-

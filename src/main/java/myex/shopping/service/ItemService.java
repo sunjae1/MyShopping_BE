@@ -3,12 +3,14 @@ package myex.shopping.service;
 import jakarta.persistence.EntityManager;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import myex.shopping.domain.Category;
 import myex.shopping.domain.Item;
 import myex.shopping.dto.itemdto.ItemDto;
 import myex.shopping.exception.ResourceNotFoundException;
 import myex.shopping.form.ItemAddForm;
 import myex.shopping.form.ItemEditForm;
 import myex.shopping.repository.ItemRepository;
+import myex.shopping.repository.jpa.JpaCategoryRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
@@ -22,6 +24,7 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class ItemService {
     private final ItemRepository itemRepository;
+    private final JpaCategoryRepository categoryRepository;
     private final ImageService imageService;
     private final EntityManager em;
 
@@ -34,6 +37,7 @@ public class ItemService {
         item.setPrice(updateParam.getPrice());
         item.setQuantity(updateParam.getQuantity());
         item.setImageUrl(updateParam.getImageUrl());
+        item.changeCategory(updateParam.getCategory());
 
         return item;
     }
@@ -65,6 +69,7 @@ public class ItemService {
         item.setPrice(form.getPrice());
         item.setQuantity(form.getQuantity());
         item.setImageUrl(imageUrl);
+        item.changeCategory(resolveCategory(form.getCategoryId()));
 
         Item savedItem = itemRepository.save(item);
         return savedItem.getId();
@@ -78,6 +83,7 @@ public class ItemService {
         item.setItemName(form.getItemName());
         item.setPrice(form.getPrice());
         item.setQuantity(form.getQuantity());
+        item.changeCategory(resolveCategory(form.getCategoryId()));
         if (imageUrl != null) {
             // 새 이미지가 업로드되면 기존 S3 이미지 삭제
             imageService.deleteFile(item.getImageUrl());
@@ -97,6 +103,7 @@ public class ItemService {
         itemRepository.deleteItem(itemId);
     }
 
+    @Transactional(readOnly = true)
     public List<ItemDto> findSearchByNameDto(String keyword) {
         List<ItemDto> dtos = itemRepository.searchByName(keyword)
                 .stream()
@@ -105,6 +112,7 @@ public class ItemService {
         return imageService.resolveImageUrls(dtos);
     }
 
+    @Transactional(readOnly = true)
     public List<ItemDto> findByCategory(Long categoryId) {
         List<ItemDto> dtos = itemRepository.findByCategory(categoryId)
                 .stream()
@@ -114,6 +122,7 @@ public class ItemService {
     }
 
     // 키워드 검색 && 카테고리 로 아이템 검색
+    @Transactional(readOnly = true)
     public List<ItemDto> findItems(String keyword, Long categoryId) {
         List<ItemDto> dtos;
         // 카테고리 && 검색어 둘 다 있는경우
@@ -145,5 +154,14 @@ public class ItemService {
                     .collect(Collectors.toList());
         }
         return imageService.resolveImageUrls(dtos);
+    }
+
+    private Category resolveCategory(Long categoryId) {
+        if (categoryId == null) {
+            return null;
+        }
+
+        return categoryRepository.findById(categoryId)
+                .orElseThrow(() -> new ResourceNotFoundException("category not found"));
     }
 }

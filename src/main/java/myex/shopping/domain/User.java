@@ -24,6 +24,7 @@ public class User {
     private Long id;
 
     // @NotEmpty(message = "이메일을 입력해주세요")
+    @Column(nullable = false, unique = true)
     private String email;
     // @NotEmpty(message = "사용자 이름을 입력해주세요")
     private String name;

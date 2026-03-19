@@ -4,6 +4,7 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Positive;
 import lombok.Getter;
 import lombok.Setter;
 import org.hibernate.validator.constraints.Range;
@@ -31,6 +32,11 @@ public class ItemEditForm {
     @Max(value = 9999, message = "최대 수량은 9999개 입니다.")
     @Schema(description = "상품 재고 수량", example = "13")
     private Integer quantity;
+
+    @Positive(message = "카테고리를 다시 선택해주세요.")
+    @Schema(description = "카테고리 ID", example = "1")
+    private Long categoryId;
+
     @Schema(description = "상품 이미지 파일(바이너리)")
     private MultipartFile imageFile;
 
@@ -44,6 +50,7 @@ public class ItemEditForm {
                 ", itemName='" + itemName + '\'' +
                 ", price=" + price +
                 ", quantity=" + quantity +
+                ", categoryId=" + categoryId +
                 ", imageUrl='" + imageUrl + '\'' +
                 '}';
     }

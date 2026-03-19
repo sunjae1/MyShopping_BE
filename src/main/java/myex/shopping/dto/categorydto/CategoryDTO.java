@@ -9,6 +9,8 @@ import myex.shopping.domain.Category;
 public class CategoryDTO {
     private Long id;
     private String name;
+    private String representativeImageUrl;
+    private int itemCount;
 
     public CategoryDTO(Category category) {
         this.id = category.getId();

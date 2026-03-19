@@ -13,6 +13,7 @@ import java.util.List;
 @ToString(exclude = {"user", "cartItems"})
 @Setter
 @Entity
+@Table(uniqueConstraints = @UniqueConstraint(name = "uk_cart_user", columnNames = "user_id"))
 public class Cart {
 
 
@@ -23,8 +24,8 @@ public class Cart {
     //mappedBy는 연관관계 주인을 가리킴. (저쪽이 주인이야)
     private List<CartItem> cartItems = new ArrayList<>();
 
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "user_id")
+    @ManyToOne(fetch = FetchType.LAZY, optional = false)
+    @JoinColumn(name = "user_id", nullable = false)
     private User user;
 
     //장바구니 아이템 추가

@@ -17,6 +17,29 @@ spring:
         use_sql_comments: true
   flyway:
     enabled: false
+  data:
+    redis:
+      host: localhost
+      port: 6379
+      password:
+      ssl:
+        enabled: false
+
+app:
+  jwt:
+    access-secret: test-jwt-secret-key-that-is-at-least-32-bytes
+    access-token-expiration: 5m
+    refresh-token-expiration: 14d
+    issuer: shopping-test
+  security:
+    cookie:
+      access-token-name: ACCESS_TOKEN
+      refresh-token-name: REFRESH_TOKEN
+      access-token-path: /api
+      refresh-token-path: /api/auth
+      domain:
+      same-site: Lax
+      secure: false
 
 cloud:
   aws:

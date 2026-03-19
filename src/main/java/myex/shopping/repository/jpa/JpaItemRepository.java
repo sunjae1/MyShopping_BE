@@ -1,6 +1,7 @@
 package myex.shopping.repository.jpa;
 
 import jakarta.persistence.EntityManager;
+import jakarta.persistence.LockModeType;
 import lombok.RequiredArgsConstructor;
 import myex.shopping.domain.Item;
 import myex.shopping.repository.ItemRepository;
@@ -38,34 +39,40 @@ public class JpaItemRepository implements ItemRepository {
 
     @Override
     public Optional<Item> findById(Long id) {
-        List<Item> result = em.createQuery("select i from Item i where i.id = :id and i.deleted = false", Item.class)
+        List<Item> result = em.createQuery("select i from Item i left join fetch i.category where i.id = :id and i.deleted = false", Item.class)
                 .setParameter("id", id)
                 .getResultList();
         return result.stream().findAny(); //결과가 없거나(0개), 1개이므로 findAny() 사용.
     }
 
     @Override
+    public Optional<Item> findByIdForUpdate(Long id) {
+        List<Item> result = em.createQuery("select i from Item i left join fetch i.category where i.id = :id and i.deleted = false", Item.class)
+                .setParameter("id", id)
+                .setLockMode(LockModeType.PESSIMISTIC_WRITE)
+                .getResultList();
+        return result.stream().findAny();
+    }
+
+    @Override
     public List<Item> findAll() {
         //JPQL 쿼리에 직접 deleted = false 조건 추가
-        return em.createQuery("select i from Item i where i.deleted = false", Item.class)
+        return em.createQuery("select i from Item i left join fetch i.category where i.deleted = false", Item.class)
                 .getResultList();
     }
 
     @Override
     @Transactional(readOnly = false)
     public void update(Long itemId, Item updateParam) {
-        Item item = new Item(); //비영속
-        item.setId(itemId);
+        Item item = em.find(Item.class, itemId);
+        if (item == null) {
+            return;
+        }
         item.setItemName(updateParam.getItemName());
         item.setPrice(updateParam.getPrice());
         item.setQuantity(updateParam.getQuantity());
         item.setImageUrl(updateParam.getImageUrl());
-        //DB에 파일은 저장 못하기 때문에 Url 만 저장.
-
-        //비영속 -> 영속, 객체 생성해서 영속성 컨텍스트에 등록.
-        //item은 여전히 비영속, em.merge 반환값이 영속 객체.
-        //commit, flush 일어나면 INSERT, UPDATE 쿼리 실행.
-        em.merge(item);
+        item.changeCategory(updateParam.getCategory());
     }
 
 
@@ -82,7 +89,7 @@ public class JpaItemRepository implements ItemRepository {
     }
     @Transactional(readOnly = true)
     public List<Item> searchByName(String name) {
-        return em.createQuery("SELECT i FROM Item i where i.itemName like :name", Item.class)
+        return em.createQuery("SELECT i FROM Item i left join fetch i.category where i.itemName like :name", Item.class)
                 .setParameter("name", "%" + name + "%")    //중요 : 검색어 앞뒤에 %를 직접 붙여줘야 함
                 .getResultList();
     }
@@ -90,14 +97,14 @@ public class JpaItemRepository implements ItemRepository {
     @Transactional(readOnly = true)
     @Override
     public List<Item> findByCategory(Long categoryId) {
-        return em.createQuery("SELECT i FROM Item i where i.category.id = :categoryId", Item.class)
+        return em.createQuery("SELECT i FROM Item i left join fetch i.category where i.category.id = :categoryId", Item.class)
                 .setParameter("categoryId", categoryId)
                 .getResultList();
     }
 
     @Override
     public List<Item> findByCategoryAndName(Long categoryId, String keyword) {
-        return em.createQuery("SELECT i FROM Item i WHERE i.category.id = :categoryId AND i.itemName LIKE :keyword", Item.class)
+        return em.createQuery("SELECT i FROM Item i left join fetch i.category WHERE i.category.id = :categoryId AND i.itemName LIKE :keyword", Item.class)
                 .setParameter("categoryId", categoryId)
                 .setParameter("keyword", "%" + keyword + "%")
                 .getResultList();

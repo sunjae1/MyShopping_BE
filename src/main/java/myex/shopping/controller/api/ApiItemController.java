@@ -42,8 +42,9 @@ public class ApiItemController {
     })
     // 전체 아이템 조회
     @GetMapping
-    public ResponseEntity<List<ItemDto>> items() {
-        return ResponseEntity.ok(itemService.findAllToDto());
+    public ResponseEntity<List<ItemDto>> items(@RequestParam(required = false) String keyword,
+                                               @RequestParam(required = false) Long categoryId) {
+        return ResponseEntity.ok(itemService.findItems(keyword, categoryId));
     }
 
     @Operation(summary = "개별 아이템 조회", description = "개별 아이템을 조회합니다.", responses = {

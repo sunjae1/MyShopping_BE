@@ -18,8 +18,10 @@ import java.util.List;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.Mockito.when;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.inOrder;
+import static org.mockito.Mockito.when;
+import org.mockito.InOrder;
 
 
 @ExtendWith(MockitoExtension.class)
@@ -51,13 +53,13 @@ class OrderServiceTest {
 
         Cart cart = new Cart();
         cart.setUser(user);
-        cart.addItem(item1, 2);
         cart.addItem(item2, 3);
-        
+        cart.addItem(item1, 2);
+
         Order order = new Order(user);
 
-        when(itemRepository.findById(1L)).thenReturn(Optional.of(item1));
-        when(itemRepository.findById(2L)).thenReturn(Optional.of(item2));
+        when(itemRepository.findByIdForUpdate(1L)).thenReturn(Optional.of(item1));
+        when(itemRepository.findByIdForUpdate(2L)).thenReturn(Optional.of(item2));
         when(orderRepository.save(any(Order.class))).thenReturn(order);
         when(cartRepository.findByUser(any(User.class))).thenReturn(Optional.of(cart));
 
@@ -69,6 +71,10 @@ class OrderServiceTest {
         assertThat(resultOrder.getStatus()).isEqualTo(OrderStatus.PAID);
         assertThat(item1.getQuantity()).isEqualTo(8); // 10 - 2
         assertThat(item2.getQuantity()).isEqualTo(17); // 20 - 3
+
+        InOrder inOrder = inOrder(itemRepository);
+        inOrder.verify(itemRepository).findByIdForUpdate(1L);
+        inOrder.verify(itemRepository).findByIdForUpdate(2L);
     }
 
     @Test
@@ -86,6 +92,7 @@ class OrderServiceTest {
         order.setStatus(OrderStatus.PAID);
 
         when(orderRepository.findById(1L)).thenReturn(Optional.of(order));
+        when(itemRepository.findByIdForUpdate(1L)).thenReturn(Optional.of(item1));
 
         // when
         orderService.orderCancel(1L, user);

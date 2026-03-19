@@ -13,6 +13,7 @@ public interface ItemRepository {
 
     Item save(Item item);
     Optional<Item> findById(Long id);
+    Optional<Item> findByIdForUpdate(Long id);
     List<Item> findAll();
     void update(Long itemId, Item updateParam);
     void deleteItem(Long itemId);

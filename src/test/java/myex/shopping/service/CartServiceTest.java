@@ -1,21 +1,26 @@
 package myex.shopping.service;
 
+import jakarta.persistence.EntityManager;
 import myex.shopping.domain.Cart;
 import myex.shopping.domain.Item;
 import myex.shopping.domain.User;
 import myex.shopping.repository.CartRepository;
 import myex.shopping.repository.ItemRepository;
 import myex.shopping.repository.UserRepository;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.SimpleTransactionStatus;
 
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
@@ -33,8 +38,26 @@ class CartServiceTest {
     @Mock
     private ImageService imageService;
 
-    @InjectMocks
+    @Mock
+    private EntityManager em;
+
+    @Mock
+    private PlatformTransactionManager transactionManager;
+
     private CartService cartService;
+
+    @BeforeEach
+    void setUp() {
+        lenient().when(transactionManager.getTransaction(any())).thenReturn(new SimpleTransactionStatus());
+        cartService = new CartService(
+                itemRepository,
+                cartRepository,
+                userRepository,
+                imageService,
+                em,
+                transactionManager
+        );
+    }
 
     @Test
     @DisplayName("사용자의 기존 장바구니를 찾는다")

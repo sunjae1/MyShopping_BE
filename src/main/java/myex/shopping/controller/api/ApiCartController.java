@@ -69,19 +69,7 @@ public class ApiCartController {
             log.info("재고 수량 초과로 장바구니 담을 시");
             return ResponseEntity.badRequest().build(); // 클라이언트 오류 400
         }
-        Cart cart = cartService.findOrCreateCartForUser(loginUser);
-        // 아이템과 수량.
-        boolean result = cart.addItem(findItem, cartForm.getQuantity());
-        // 전체 장바구니 수량이 총 수량을 넘었을 때
-        if (result == false) {
-            log.info("전체 장바구니 수량이 총 수량을 넘었을 때");
-            return ResponseEntity.badRequest().build(); // 클라이언트 오류 400
-        }
-        if (cart.getId() != null) {
-            cartService.update(cart);
-        } else {
-            cartService.save(cart, loginUser);
-        }
+        Cart cart = cartService.addItem(loginUser, findItem.getId(), cartForm.getQuantity());
         CartDto cartDto = new CartDto(cart);
         imageService.resolveCartItemImageUrls(cartDto.getCartItems());
         return ResponseEntity.ok(cartDto); // 200

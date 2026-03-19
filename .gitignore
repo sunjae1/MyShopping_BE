@@ -39,8 +39,8 @@ out/
 # Environment Variables
 .env
 
-# Gemini
-.gemini
+# MD reports
+Md_report
 
 # Image Folder
 UploadFolder

@@ -30,6 +30,7 @@ public class UserController {
     private final PostService postService;
     private final CartService cartService;
     private final ItemService itemService;
+    private final CategoryService categoryService;
 
     // 로그인 페이지로 보내기.
     @GetMapping("/login")
@@ -80,6 +81,7 @@ public class UserController {
         }
         List<ItemDto> items = itemService.findItems(keyword, categoryId);
         model.addAttribute("items", items);
+        model.addAttribute("categories", categoryService.findAll());
         return "main";
     }
 

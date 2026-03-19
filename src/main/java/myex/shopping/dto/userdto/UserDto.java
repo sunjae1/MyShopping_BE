@@ -2,6 +2,7 @@ package myex.shopping.dto.userdto;
 
 import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.Getter;
+import myex.shopping.domain.Role;
 import myex.shopping.domain.User;
 
 @Getter
@@ -14,6 +15,8 @@ public class UserDto {
     private String email;
     @Schema(description = "사용자 이름", example = "테스터")
     private String name;
+    @Schema(description = "사용자 권한", example = "ADMIN")
+    private Role role;
 
     public UserDto() {
     }
@@ -22,6 +25,7 @@ public class UserDto {
         this.id = user.getId();
         this.email = user.getEmail();
         this.name = user.getName();
+        this.role = user.getRole();
     }
 
     @Override
@@ -30,6 +34,7 @@ public class UserDto {
                 "id=" + id +
                 ", email='" + email + '\'' +
                 ", name='" + name + '\'' +
+                ", role=" + role +
                 '}';
     }
 }

@@ -1,5 +1,6 @@
 package myex.shopping.repository.jpa;
 
+import myex.shopping.domain.Category;
 import myex.shopping.domain.Item;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -149,15 +150,24 @@ class JpaItemRepositoryTest {
         originalItem.setPrice(100);
         originalItem.setQuantity(10);
         originalItem.setImageUrl("original.jpg");
+        Category originalCategory = new Category();
+        originalCategory.setName("원본 카테고리");
+        em.persist(originalCategory);
+        originalItem.changeCategory(originalCategory);
         em.persistAndFlush(originalItem);
         Long itemId = originalItem.getId();
         em.detach(originalItem);
-        
+
+        Category updatedCategory = new Category();
+        updatedCategory.setName("수정 카테고리");
+        em.persistAndFlush(updatedCategory);
+
         Item updateParam = new Item();
         updateParam.setItemName("Updated Name");
         updateParam.setPrice(200);
         updateParam.setQuantity(20);
         updateParam.setImageUrl("updated.jpg");
+        updateParam.changeCategory(updatedCategory);
 
         // when
         itemRepository.update(itemId, updateParam);
@@ -170,6 +180,8 @@ class JpaItemRepositoryTest {
         assertThat(foundItem.getPrice()).isEqualTo(200);
         assertThat(foundItem.getQuantity()).isEqualTo(20);
         assertThat(foundItem.getImageUrl()).isEqualTo("updated.jpg");
+        assertThat(foundItem.getCategory()).isNotNull();
+        assertThat(foundItem.getCategory().getName()).isEqualTo("수정 카테고리");
     }
 
     @Test

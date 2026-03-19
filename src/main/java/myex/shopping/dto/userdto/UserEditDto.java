@@ -6,7 +6,6 @@ import lombok.Setter;
 import myex.shopping.domain.User;
 
 @Getter
-@Setter
 @Schema(description = "사용자 정보 담는 DTO")
 public class UserEditDto {
 
@@ -21,6 +20,14 @@ public class UserEditDto {
     }
 
     public UserEditDto() {
+    }
+
+    public void setEmail(String email) {
+        this.email = email == null ? null : email.trim();
+    }
+
+    public void setName(String name) {
+        this.name = name;
     }
 
     @Override
