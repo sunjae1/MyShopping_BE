@@ -11,6 +11,7 @@ import myex.shopping.dto.categorydto.CategoryDTO;
 import myex.shopping.dto.categorydto.CategoryEditDTO;
 import myex.shopping.service.CategoryService;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 
@@ -41,6 +42,7 @@ public class ApiCategoryController {
     }
 
     // 등록
+    @PreAuthorize("hasRole('ADMIN')")
     @PostMapping
     public ResponseEntity<CategoryDTO> createCategory(@RequestBody @Valid CategoryCreateDTO createDTO) {
         CategoryDTO categoryDTO = new CategoryDTO(categoryService.createCategory(createDTO));
@@ -48,6 +50,7 @@ public class ApiCategoryController {
     }
 
     // 수정
+    @PreAuthorize("hasRole('ADMIN')")
     @PutMapping("/{id}")
     public ResponseEntity<CategoryDTO> updateCategory(@PathVariable @Positive(message = "양수만 가능합니다.") Long id,
             @RequestBody CategoryEditDTO updateDTO) {
@@ -56,6 +59,7 @@ public class ApiCategoryController {
     }
 
     // 삭제
+    @PreAuthorize("hasRole('ADMIN')")
     @DeleteMapping("/{id}")
     public ResponseEntity<Void> deleteCategory(@PathVariable @Positive Long id) {
         categoryService.deleteCategory(id);
