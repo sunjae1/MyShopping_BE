@@ -1,6 +1,5 @@
 package myex.shopping.controller.api;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import myex.shopping.domain.Comment;
 import myex.shopping.domain.Post;
 import myex.shopping.domain.User;
@@ -8,7 +7,6 @@ import myex.shopping.dto.userdto.PrincipalDetails;
 import myex.shopping.repository.CommentRepository;
 import myex.shopping.repository.PostRepository;
 import myex.shopping.repository.UserRepository;
-import myex.shopping.service.CommentService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -18,6 +16,7 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.transaction.annotation.Transactional;
 
+import static org.hamcrest.Matchers.hasItem;
 import static org.hamcrest.Matchers.is;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.user;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
@@ -33,16 +32,11 @@ public class ApiCommentControllerTest {
         @Autowired
         private MockMvc mockMvc;
         @Autowired
-        private ObjectMapper objectMapper;
-        @Autowired
         private UserRepository userRepository;
         @Autowired
         private PostRepository postRepository;
         @Autowired
         private CommentRepository commentRepository;
-        @Autowired
-        private CommentService commentService;
-
         private User testUser;
         private Post testPost;
         private PrincipalDetails testUserDetails;
@@ -88,6 +82,38 @@ public class ApiCommentControllerTest {
                                 .andDo(print())
                                 .andExpect(status().isOk())
                                 .andExpect(jsonPath("$.content", is("수정된 댓글입니다.")));
+        }
+
+        @Test
+        @DisplayName("댓글 추가 API 테스트 - 255자 초과시 실패")
+        void addComment_shouldRejectTooLongContent() throws Exception {
+                String tooLongComment = "a".repeat(256);
+
+                mockMvc.perform(post("/api/posts/{postId}/comments", testPost.getId())
+                                .with(user(testUserDetails))
+                                .param("reply_content", tooLongComment))
+                                .andDo(print())
+                                .andExpect(status().isBadRequest())
+                                .andExpect(jsonPath("$['addComment.reply_content']", hasItem("댓글은 255자 이하로 입력해주세요")));
+        }
+
+        @Test
+        @DisplayName("댓글 수정 API 테스트 - 255자 초과시 실패")
+        void updateComment_shouldRejectTooLongContent() throws Exception {
+                Comment comment = new Comment();
+                comment.setContent("원본 댓글");
+                comment.setUser(testUser);
+                testPost.addComment(comment);
+                commentRepository.save(comment);
+
+                String tooLongComment = "b".repeat(256);
+
+                mockMvc.perform(put("/api/posts/{postId}/comments/{commentId}", testPost.getId(), comment.getId())
+                                .with(user(testUserDetails))
+                                .param("reply_content", tooLongComment))
+                                .andDo(print())
+                                .andExpect(status().isBadRequest())
+                                .andExpect(jsonPath("$['updateComment.reply_content']", hasItem("댓글은 255자 이하로 입력해주세요")));
         }
 
         @Test

@@ -25,6 +25,7 @@ public class Comment {
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "user_id")
     private User user;
+    @Column(length = 255)
     private String content;
     private LocalDateTime createdDate = LocalDateTime.now();
 

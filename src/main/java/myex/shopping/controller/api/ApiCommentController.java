@@ -6,6 +6,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import myex.shopping.dto.userdto.PrincipalDetails;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Positive;
+import jakarta.validation.constraints.Size;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import myex.shopping.domain.Comment;
@@ -46,7 +47,10 @@ public class ApiCommentController {
         // @RequestBody : Dto 써서, JSON 으로 보내기 가능. (고민중)
         @PostMapping("/{postId}/comments")
         public ResponseEntity<?> addComment(@PathVariable @Positive(message = "양수만 입력 가능합니다.") Long postId,
-                        @RequestParam @NotBlank(message = "댓글 내용을 입력해주세요") String reply_content,
+                        @RequestParam
+                        @NotBlank(message = "댓글 내용을 입력해주세요")
+                        @Size(max = 255, message = "댓글은 255자 이하로 입력해주세요")
+                        String reply_content,
                         @AuthenticationPrincipal PrincipalDetails principalDetails) {
                 if (principalDetails == null) {
                         log.info("로그인 실패");
@@ -70,7 +74,10 @@ public class ApiCommentController {
         @PutMapping("/{postId}/comments/{commentId}")
         public ResponseEntity<?> updateComment(@PathVariable @Positive(message = "양수만 입력 가능합니다.") Long postId,
                         @PathVariable @Positive(message = "양수만 입력 가능합니다.") Long commentId,
-                        @RequestParam @NotBlank(message = "댓글 수정 내용을 입력해주세요") String reply_content,
+                        @RequestParam
+                        @NotBlank(message = "댓글 수정 내용을 입력해주세요")
+                        @Size(max = 255, message = "댓글은 255자 이하로 입력해주세요")
+                        String reply_content,
                         @AuthenticationPrincipal PrincipalDetails principalDetails) {
                 if (principalDetails == null) {
                         log.info("로그인 실패");
