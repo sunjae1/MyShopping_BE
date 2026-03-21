@@ -48,10 +48,24 @@ public class JpaPostRepository implements PostRepository {
     //Post - Comments : OneToMany 컬렉션 (List)를 조인하면 데이터가 뻥튀기 될 수 있어 Post 중복 조회 방지, distinct 추가.
     @Override
     public List<Post> findAll() {
-        return em.createQuery("select distinct p from Post p " +
+        return em.createQuery("select p from Post p " +
+                        "join fetch p.user", Post.class)
+                .getResultList();
+    }
+
+    @Override
+    public List<Post> findAllByCreatedDateAsc() {
+        return em.createQuery("select p from Post p " +
                         "join fetch p.user " +
-                        "left join fetch p.comments c " +
-                        "left join fetch c.user cu", Post.class)
+                        "order by p.createdDate asc", Post.class)
+                .getResultList();
+    }
+
+    @Override
+    public List<Post> findAllByCreatedDateDesc() {
+        return em.createQuery("select p from Post p " +
+                        "join fetch p.user " +
+                        "order by p.createdDate desc", Post.class)
                 .getResultList();
     }
 

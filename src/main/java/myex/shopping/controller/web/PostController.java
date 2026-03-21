@@ -5,6 +5,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import myex.shopping.domain.User;
 import myex.shopping.dto.postdto.PostDBDto;
+import myex.shopping.dto.postdto.PostListDto;
 import myex.shopping.dto.postdto.PostEditDto;
 import myex.shopping.dto.userdto.PrincipalDetails;
 import myex.shopping.dto.userdto.UserDto;
@@ -43,7 +44,7 @@ public class PostController {
             model.addAttribute("user", userDto);
             model.addAttribute("loginUser", userDto);
         }
-        List<PostDBDto> posts = postService.findAllPostDBDto();
+        List<PostListDto> posts = postService.findAllPostListDto();
         model.addAttribute("posts", posts);
         return "posts/list";
     }

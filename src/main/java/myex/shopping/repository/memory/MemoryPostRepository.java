@@ -34,6 +34,21 @@ public class MemoryPostRepository implements PostRepository {
         return new ArrayList<>(store.values());
     }
 
+    @Override
+    public List<Post> findAllByCreatedDateAsc() {
+        return store.values().stream()
+                .sorted(Comparator.comparing(Post::getCreatedDate, Comparator.nullsLast(LocalDateTime::compareTo)))
+                .collect(Collectors.toList());
+    }
+
+    @Override
+    public List<Post> findAllByCreatedDateDesc() {
+        return store.values().stream()
+                .sorted(Comparator.comparing(Post::getCreatedDate,
+                        Comparator.nullsLast(Comparator.reverseOrder())))
+                .collect(Collectors.toList());
+    }
+
     //User 로 Order 전체 찾기. (사용자가 주문한 내역 전부 호출)
     @Override
     public List<Post> findByUser(User user) {

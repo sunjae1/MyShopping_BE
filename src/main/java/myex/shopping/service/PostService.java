@@ -7,6 +7,7 @@ import myex.shopping.domain.Post;
 import myex.shopping.domain.User;
 import myex.shopping.dto.mypagedto.MyPagePostDBDto;
 import myex.shopping.dto.postdto.PostDBDto;
+import myex.shopping.dto.postdto.PostListDto;
 import myex.shopping.dto.postdto.PostDto;
 import myex.shopping.dto.postdto.PostEditDto;
 import myex.shopping.exception.ResourceNotFoundException;
@@ -18,6 +19,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Locale;
 import java.util.stream.Collectors;
 
 @Slf4j
@@ -29,7 +31,6 @@ public class PostService {
     private final PostRepository postRepository;
     private final UserRepository userRepository;
 
-    // 게시물 저장.
     public Post createPost(PostForm form, User loginUser) {
         Post post = new Post();
         post.setTitle(form.getTitle());
@@ -72,11 +73,28 @@ public class PostService {
     }
 
     @Transactional(readOnly = true)
-    public List<PostDBDto> findAllPostDBDto() {
-        // 1. fetch join으로 최적화 된 finAll()호출(쿼리 1번, Post - User, Comments)
+    public List<PostListDto> findAllPostListDto() {
         List<Post> posts = postRepository.findAll();
         return posts.stream()
-                .map(PostDBDto::new) // post -> new PostDBDto(post) 동일.
+                .map(PostListDto::new)
+                .collect(Collectors.toList());
+    }
+
+    @Transactional(readOnly = true)
+    public List<PostListDto> findAllPostListDto(String sortDirection) {
+        List<Post> posts;
+        if (sortDirection == null || sortDirection.isBlank()) {
+            posts = postRepository.findAllByCreatedDateDesc();
+        } else {
+            switch (sortDirection.toLowerCase(Locale.ROOT)) {
+                case "asc" -> posts = postRepository.findAllByCreatedDateAsc();
+                case "desc" -> posts = postRepository.findAllByCreatedDateDesc();
+                default -> throw new IllegalArgumentException("sort parameter must be 'asc' or 'desc'");
+            }
+        }
+
+        return posts.stream()
+                .map(PostListDto::new)
                 .collect(Collectors.toList());
     }
 

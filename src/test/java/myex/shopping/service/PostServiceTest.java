@@ -4,6 +4,7 @@ import myex.shopping.domain.Post;
 import myex.shopping.domain.User;
 import myex.shopping.dto.mypagedto.MyPagePostDBDto;
 import myex.shopping.dto.postdto.PostDBDto;
+import myex.shopping.dto.postdto.PostListDto;
 import myex.shopping.exception.ResourceNotFoundException;
 import myex.shopping.repository.PostRepository;
 import myex.shopping.repository.UserRepository;
@@ -107,7 +108,7 @@ class PostServiceTest {
 
     @Test
     @DisplayName("모든 포스트 목록을 DTO로 변환하여 반환한다")
-    void findAllPostDBDto() {
+    void findAllPostListDto() {
         // given
         Post post1 = new Post("Title1", "Content1");
         post1.setUser(new User());
@@ -116,7 +117,7 @@ class PostServiceTest {
         when(postRepository.findAll()).thenReturn(Arrays.asList(post1, post2));
 
         // when
-        List<PostDBDto> dtoList = postService.findAllPostDBDto();
+        List<PostListDto> dtoList = postService.findAllPostListDto();
 
         // then
         assertThat(dtoList).hasSize(2);

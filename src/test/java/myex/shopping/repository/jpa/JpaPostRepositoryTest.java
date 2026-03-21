@@ -3,6 +3,7 @@ package myex.shopping.repository.jpa;
 import myex.shopping.domain.Comment;
 import myex.shopping.domain.Post;
 import myex.shopping.domain.User;
+import org.hibernate.Hibernate;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -36,19 +37,16 @@ class JpaPostRepositoryTest {
     }
 
     @Test
-    @DisplayName("새로운 게시물 저장 테스트")
+    @DisplayName("새 게시물 저장")
     void save() {
-        // given
         User managedUser = em.find(User.class, user.getId());
         Post post = new Post("New Post", "Content of new post");
         post.setUser(managedUser);
 
-        // when
         Post savedPost = postRepository.save(post);
         em.flush();
         em.clear();
 
-        // then
         assertThat(savedPost.getId()).isNotNull();
         Post foundPost = em.find(Post.class, savedPost.getId());
         assertThat(foundPost).isNotNull();
@@ -59,7 +57,6 @@ class JpaPostRepositoryTest {
     @Test
     @DisplayName("ID로 게시물 조회")
     void findById() {
-        // given
         User managedUser = em.find(User.class, user.getId());
         Post post = new Post("Find Me Post", "Content");
         post.setUser(managedUser);
@@ -67,18 +64,16 @@ class JpaPostRepositoryTest {
         Long postId = post.getId();
         em.clear();
 
-        // when
         Optional<Post> foundPostOpt = postRepository.findById(postId);
 
-        // then
         assertThat(foundPostOpt).isPresent();
         assertThat(foundPostOpt.get().getId()).isEqualTo(postId);
+        assertThat(Hibernate.isInitialized(foundPostOpt.get().getComments())).isTrue();
     }
 
     @Test
     @DisplayName("사용자로 게시물 목록 조회")
     void findByUser() {
-        // given
         User managedUser = em.find(User.class, user.getId());
         Post post1 = new Post("Post 1", "Content 1");
         post1.setUser(managedUser);
@@ -91,18 +86,15 @@ class JpaPostRepositoryTest {
         em.flush();
         em.clear();
 
-        // when
         User queryUser = em.find(User.class, managedUser.getId());
         List<Post> posts = postRepository.findByUser(queryUser);
 
-        // then
         assertThat(posts).hasSize(2);
     }
 
     @Test
-    @DisplayName("모든 게시물 조회 (연관된 사용자, 댓글과 함께)")
+    @DisplayName("모든 게시물 조회(목록용): user fetch join, comments lazy")
     void findAll() {
-        // given
         User managedUser = em.find(User.class, user.getId());
         Post post1 = new Post("Post 1", "Content 1");
         post1.setUser(managedUser);
@@ -118,26 +110,25 @@ class JpaPostRepositoryTest {
         Post post2 = new Post("Post 2", "Content 2");
         post2.setUser(user2);
         em.persist(post2);
-        
+
         em.flush();
         em.clear();
 
-        // when
         List<Post> allPosts = postRepository.findAll();
 
-        // then
         assertThat(allPosts).hasSize(2);
-        // Verify that fetching is working by accessing related entities
         assertThat(allPosts.get(0).getUser()).isNotNull();
-        // The post with a comment should have its comments loaded
-        Post foundPost1 = allPosts.stream().filter(p -> p.getId().equals(post1.getId())).findFirst().get();
-        assertThat(foundPost1.getComments()).hasSize(1);
+
+        Post foundPost1 = allPosts.stream()
+                .filter(p -> p.getId().equals(post1.getId()))
+                .findFirst()
+                .orElseThrow();
+        assertThat(Hibernate.isInitialized(foundPost1.getComments())).isFalse();
     }
 
     @Test
-    @DisplayName("게시물 삭제 테스트")
+    @DisplayName("게시물 삭제")
     void delete() {
-        // given
         User managedUser = em.find(User.class, user.getId());
         Post post = new Post("To be deleted", "Delete me");
         post.setUser(managedUser);
@@ -145,12 +136,10 @@ class JpaPostRepositoryTest {
         Long postId = post.getId();
         em.clear();
 
-        // when
         postRepository.deleteById(postId);
         em.flush();
         em.clear();
 
-        // then
         Post deletedPost = em.find(Post.class, postId);
         assertThat(deletedPost).isNull();
     }

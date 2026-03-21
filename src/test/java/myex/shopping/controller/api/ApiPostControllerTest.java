@@ -18,17 +18,24 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
-import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.security.test.context.support.WithMockUser;
+import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.transaction.annotation.Transactional;
+
+import java.time.LocalDateTime;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.hasSize;
 import static org.hamcrest.Matchers.is;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.user;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultHandlers.print;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @SpringBootTest
 @AutoConfigureMockMvc
@@ -67,6 +74,8 @@ public class ApiPostControllerTest {
         otherUserDetails = new PrincipalDetails(otherUser);
 
         Post post = new Post("테스트 제목", "테스트 내용");
+        post.setCreatedDate(LocalDateTime.of(2025, 1, 1, 10, 0));
+        post.setAuthor(testUser.getName());
         testPost = postService.addUser(post, testUser.getId());
         postRepository.save(testPost);
 
@@ -84,7 +93,52 @@ public class ApiPostControllerTest {
                 .andExpect(content().contentType(MediaType.APPLICATION_JSON))
                 .andExpect(jsonPath("$", hasSize(1)))
                 .andExpect(jsonPath("$[0].title", is("테스트 제목")))
-                .andExpect(jsonPath("$[0].authorName", is(testUser.getName())));
+                .andExpect(jsonPath("$[0].authorName", is(testUser.getName())))
+                .andExpect(jsonPath("$[0].comments").doesNotExist());
+    }
+
+    @Test
+    @WithMockUser
+    @DisplayName("게시물 목록 ASC 정렬 테스트: GET /api/posts?sort=asc")
+    void getAllPosts_shouldSortByCreatedDateAsc() throws Exception {
+        savePostWithCreatedDate(testUser, "중간 글", LocalDateTime.of(2025, 1, 2, 10, 0));
+        savePostWithCreatedDate(testUser, "최신 글", LocalDateTime.of(2025, 1, 3, 10, 0));
+
+        mockMvc.perform(get("/api/posts").param("sort", "asc"))
+                .andDo(print())
+                .andExpect(status().isOk())
+                .andExpect(content().contentType(MediaType.APPLICATION_JSON))
+                .andExpect(jsonPath("$", hasSize(3)))
+                .andExpect(jsonPath("$[0].title", is("테스트 제목")))
+                .andExpect(jsonPath("$[1].title", is("중간 글")))
+                .andExpect(jsonPath("$[2].title", is("최신 글")));
+    }
+
+    @Test
+    @WithMockUser
+    @DisplayName("게시물 목록 DESC 정렬 테스트: GET /api/posts?sort=desc")
+    void getAllPosts_shouldSortByCreatedDateDesc() throws Exception {
+        savePostWithCreatedDate(testUser, "중간 글", LocalDateTime.of(2025, 1, 2, 10, 0));
+        savePostWithCreatedDate(testUser, "최신 글", LocalDateTime.of(2025, 1, 3, 10, 0));
+
+        mockMvc.perform(get("/api/posts").param("sort", "desc"))
+                .andDo(print())
+                .andExpect(status().isOk())
+                .andExpect(content().contentType(MediaType.APPLICATION_JSON))
+                .andExpect(jsonPath("$", hasSize(3)))
+                .andExpect(jsonPath("$[0].title", is("최신 글")))
+                .andExpect(jsonPath("$[1].title", is("중간 글")))
+                .andExpect(jsonPath("$[2].title", is("테스트 제목")));
+    }
+
+    @Test
+    @WithMockUser
+    @DisplayName("게시물 목록 정렬 파라미터 오류 테스트: GET /api/posts?sort=invalid")
+    void getAllPosts_shouldReturnBadRequest_whenSortParamIsInvalid() throws Exception {
+        mockMvc.perform(get("/api/posts").param("sort", "invalid"))
+                .andDo(print())
+                .andExpect(status().isBadRequest())
+                .andExpect(content().string("sort parameter must be 'asc' or 'desc'"));
     }
 
     @Test
@@ -108,9 +162,9 @@ public class ApiPostControllerTest {
         postForm.setContent("새로운 내용입니다.");
 
         mockMvc.perform(post("/api/posts")
-                .with(user(testUserDetails))
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(postForm)))
+                        .with(user(testUserDetails))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(postForm)))
                 .andDo(print())
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.title", is("새로운 게시물")))
@@ -118,16 +172,16 @@ public class ApiPostControllerTest {
     }
 
     @Test
-    @DisplayName("게시물 수정 API 성공 테스트 (작성자): PUT /api/posts/{id}")
+    @DisplayName("게시물 수정 API 성공 테스트(작성자): PUT /api/posts/{id}")
     void updatePost_shouldUpdatePost_whenUserIsOwner() throws Exception {
         PostEditDto editDto = new PostEditDto();
         editDto.setTitle("수정된 제목");
         editDto.setContent("수정된 내용입니다.");
 
         mockMvc.perform(put("/api/posts/{id}", testPost.getId())
-                .with(user(testUserDetails))
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(editDto)))
+                        .with(user(testUserDetails))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(editDto)))
                 .andDo(print())
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.title", is("수정된 제목")))
@@ -135,10 +189,10 @@ public class ApiPostControllerTest {
     }
 
     @Test
-    @DisplayName("게시물 삭제 API 성공 테스트 (작성자): DELETE /api/posts/{id}")
+    @DisplayName("게시물 삭제 API 성공 테스트(작성자): DELETE /api/posts/{id}")
     void deletePost_shouldDeletePost_whenUserIsOwner() throws Exception {
         mockMvc.perform(delete("/api/posts/{id}", testPost.getId())
-                .with(user(testUserDetails)))
+                        .with(user(testUserDetails)))
                 .andDo(print())
                 .andExpect(status().isNoContent());
 
@@ -146,13 +200,23 @@ public class ApiPostControllerTest {
     }
 
     @Test
-    @DisplayName("게시물 삭제 API 실패 테스트 (작성자 아님): DELETE /api/posts/{id}")
+    @DisplayName("게시물 삭제 API 실패 테스트(작성자 아님): DELETE /api/posts/{id}")
     void deletePost_shouldFail_whenUserIsNotOwner() throws Exception {
         mockMvc.perform(delete("/api/posts/{id}", testPost.getId())
-                .with(user(otherUserDetails)))
+                        .with(user(otherUserDetails)))
                 .andDo(print())
                 .andExpect(status().isForbidden());
 
         assertThat(postRepository.findById(testPost.getId())).isNotEmpty();
+    }
+
+    private void savePostWithCreatedDate(User user, String title, LocalDateTime createdDate) {
+        Post post = new Post(title, title + " 내용");
+        post.setCreatedDate(createdDate);
+        post.setAuthor(user.getName());
+        postService.addUser(post, user.getId());
+        postRepository.save(post);
+        em.flush();
+        em.clear();
     }
 }
